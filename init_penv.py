@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 
-
 import os
 import shutil
 import subprocess
 import sys
 import platform
 import logging
-from console import Console
 from pathlib import Path
-from rich import print
 from rich.console import Console
 from rich.table import Table
 
 
 def setup_logging():
+    """Set up logging configuration."""
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -23,39 +21,38 @@ def setup_logging():
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-
-
+# Function to delete the virtual environment at the given path
 def delete_virtual_environment(env_path):
     shutil.rmtree(env_path)
     logging.info(f"Deleted virtual environment at {env_path}")
-    print(f"Deleted virtual environment at {env_path}")
+    console.print(f"Deleted virtual environment at {env_path}")
 
-
+# Function to clone an existing virtual environment to a new location
 def clone_virtual_environment(src_env_path, dest_env_name, folder_path):
     dest_env_path = os.path.join(folder_path, dest_env_name)
     shutil.copytree(src_env_path, dest_env_path)
     logging.info(f"Cloned virtual environment at {dest_env_path}")
-    print(f"Cloned virtual environment at {dest_env_path}")
+    console.print(f"Cloned virtual environment at {dest_env_path}")
 
-
+# Function to update a package in the virtual environment
 def update_package(env_path, package_name):
     subprocess.run([os.path.join(env_path, "bin", "pip"), "install", "--upgrade", package_name], check=True)
     logging.info(f"{package_name} updated successfully.")
-    print(f"{package_name} updated successfully.")
+    console.print(f"{package_name} updated successfully.")
 
-
+# Function to downgrade a package in the virtual environment
 def downgrade_package(env_path, package_name, version):
     subprocess.run([os.path.join(env_path, "bin", "pip"), "install", f"{package_name}=={version}"], check=True)
     logging.info(f"{package_name} downgraded to version {version}.")
-    print(f"{package_name} downgraded to version {version}.")
+    console.print(f"{package_name} downgraded to version {version}.")
 
-
+# Function to uninstall a package from the virtual environment
 def uninstall_package(env_path, package_name):
     subprocess.run([os.path.join(env_path, "bin", "pip"), "uninstall", "-y", package_name], check=True)
     logging.info(f"{package_name} uninstalled successfully.")
-    print(f"{package_name} uninstalled successfully.")
+    console.print(f"{package_name} uninstalled successfully.")
 
-
+# Function to check if an executable is installed and can be run
 def is_executable_installed(executable):
     try:
         subprocess.run([executable, "--version"], capture_output=True, check=True)
@@ -63,23 +60,27 @@ def is_executable_installed(executable):
     except FileNotFoundError:
         return False
 
-
+# Function to search for existing virtual environments in the given folder
 def search_existing_envs(folder_path):
-    envs = [d for d in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, d))]
-    return envs
+    """Search for existing virtual environments in the given folder."""
+    folder_path = Path(folder_path)
+    existing_envs = [d for d in folder_path.glob("*") if d.is_dir()]
+    return [str(env_path.relative_to(folder_path)) for env_path in existing_envs]
 
 
+# Function to create a new virtual environment at the given path
 def create_virtual_environment(env_path):
     python_executable = "python3" if platform.system() != "Windows" else "python"
-    subprocess.run([python_executable, "-m", "venv", env_path], check=True)
+    subprocess.check_call([python_executable, "-m", "venv", env_path])
     logging.info(f"Created virtual environment at {env_path}")
-    print(f"Created virtual environment at {env_path}")
+    console.print(f"Created virtual environment at {env_path}")
 
 
+# Function to create a requirements.txt file for the virtual environment
 def create_requirements_file(env_path):
     subprocess.run([os.path.join(env_path, "bin", "pip"), "freeze", "--local", ">", "requirements.txt"], shell=True, check=True, text=True)
     logging.info("requirements.txt file created successfully.")
-    print("requirements.txt file created successfully.")
+    console.print("requirements.txt file created successfully.")
 
 
 def upgrade_packages(env_path):
@@ -218,10 +219,21 @@ def main_loop(env_path):
         elif action == '8':
             package_name = input("Enter the package name to uninstall: ").strip()
             uninstall_package(env_path, package_name)
+        elif action == '9':
+            activate_virtual_environment(env_path)
         elif action.lower() == 'q':
             break
         else:
             print("Invalid input. Please try again.")
+
+def activate_virtual_environment(env_path):
+    activate_script = os.path.join(env_path, "bin", "activate")
+    env = os.environ.copy()
+    env["VIRTUAL_ENV"] = env_path
+    env["PATH"] = f"{env_path}/bin:{env['PATH']}"
+    subprocess.run(f"source {activate_script}", shell=True, check=True, env=env)
+    logging.info(f"Activated virtual environment at {env_path}")
+    print(f"Activated virtual environment at {env_path}")
 
 # Modify prompt_for_action function
 def prompt_for_action():
@@ -235,6 +247,7 @@ def prompt_for_action():
     console.print("6. Update a package")
     console.print("7. Downgrade a package")
     console.print("8. Uninstall a package")
+    console.print("9. Activate virtual environment")
     console.print("q. Quit")
 
     user_input = input("Enter the number of the action or 'q' to quit: ").strip()
