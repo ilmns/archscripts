@@ -7,6 +7,7 @@ import subprocess
 import sys
 import platform
 import logging
+from console import Console
 from pathlib import Path
 from rich import print
 from rich.console import Console
@@ -152,15 +153,18 @@ def main():
         print(f"Creating virtual environment at {env_path}...")
         create_virtual_environment(env_path)
 
-    activate_script = os.path.join(env_path, "bin", "activate")
+    if platform.system() == 'Windows':
+        activate_script = os.path.join(env_path, "Scripts", "activate.bat")
+    else:
+        activate_script = os.path.join(env_path, "bin", "activate")
 
-    print(f"\nTo activate the virtual environment, run: source {activate_script}")
+    print(f"\nTo activate the virtual environment, run: {activate_script}")
 
     print("\nUpgrading pip, setuptools, and wheel...")
     upgrade_packages(env_path)
     print("\nDone! You can now install packages using pip inside your virtual environment.")
 
-    return env_path  # Add this line to the end of main()
+    return env_path
 
 
 def search_and_install_packages(env_path):
