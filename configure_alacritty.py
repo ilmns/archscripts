@@ -17,41 +17,62 @@ def write_config(file, content):
     with open(file, "w") as f:
         f.write(content)
 
-def configure_alacritty():
+def install_packages(packages):
+    subprocess.run(["sudo", "apt", "update"])
+    subprocess.run(["sudo", "apt", "install", "-y"] + packages)
+
+def configure_alacritty(install_optional=False):
     alacritty_config_dir = os.path.expanduser("~/.config/alacritty")
     alacritty_config_file = os.path.join(alacritty_config_dir, "alacritty.yml")
 
-    # Backup existing Alacritty config
     backup_file(alacritty_config_file)
 
-    # Create Alacritty configuration directory if it doesn't exist
     create_config_directory(alacritty_config_dir)
 
     alacritty_config_content = '''
-# Alacritty Configuration for Maximum Performance and Copy-Paste Support
-
-# Use dynamic padding to maximize terminal window size
 window:
   dynamic_padding: true
 
-# Set scrolling history to a lower value to reduce memory usage
 scrolling:
   history: 1000
 
-# Use the fastest available OpenGL version
 render_timer: true
 persistent_logging: false
 
-key_bindings:
-  # Copy
-  - { key: C,        mods: Control, action: Copy             }
-  # Paste
-  - { key: V,        mods: Control, action: Paste            }
+mouse:
+  wheel:
+    up:
+      modifiers: []
+      amount: 3
+    down:
+      modifiers: []
+      amount: 3
+  url:
+    launcher: none
+  selection:
+    save_to_clipboard: true
+
+history:
+  search:
+    reverse_search:
+      key: R
+      mods: Control
+    forward_search:
+      key: F
+      mods: Control+Shift
+
+shell:
+  program: /usr/bin/zsh
+
 '''
 
-    # Write Alacritty configuration
+    if install_optional:
+        install_packages(["zsh", "fonts-powerline"])
+        subprocess.run(["p10k", "configure"])
+
     write_config(alacritty_config_file, alacritty_config_content)
 
     print_colored("Alacritty configuration updated for maximum performance and copy-paste support.", "1;32")
+
 
 configure_alacritty()
