@@ -118,18 +118,16 @@ set_wallpaper() {
       echo "No wallpaper files found in $WALLPAPER_DIR. Downloading default wallpaper..."
       download "$DEFAULT_WALLPAPER_URL" "$DEFAULT_WALLPAPER_PATH"
       feh --bg-scale "$DEFAULT_WALLPAPER_PATH"
-      return
+    else
+      local random_img
+      random_img=${img_paths[RANDOM % ${#img_paths[@]}]}
+      feh --bg-scale "$random_img"
     fi
-
-    local random_img
-    random_img=${img_paths[RANDOM % ${#img_paths[@]}]}
-    feh --bg-scale "$random_img"
   elif [[ -n $url ]]; then
     download "$url" "$path"
     feh --bg-scale "$path"
   else
     echo "Error: No wallpaper specified."
-    return
   fi
 }
 
@@ -200,12 +198,12 @@ main() {
   dep_check "nitrogen"
   dep_check "compton"
 
-  set_wallpaper "$path" "$url" "$random"
-
   make_dir "$CONFIG_DIR/bspwm"
   make_dir "$CONFIG_DIR/sxhkd"
   make_dir "$CONFIG_DIR/rofi"
   make_dir "$CONFIG_DIR/picom"
+
+  set_wallpaper "$path" "$url" "$random"
 
   shell_options=("bash" "zsh" "fish")
   default_shell=$(choose "${shell_options[@]}" "Select default shell:")
