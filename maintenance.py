@@ -1,153 +1,270 @@
-#!/usr/bin/python
-import os
-import subprocess
-import shutil
-from termcolor import colored
-from prettytable import PrettyTable
-from datetime import datetime
+#!/bin/bash
 
+CONFIG_DIR="$HOME/.config"
+BACKUP_DIR="$HOME/.config_backup"
 
-if os.geteuid() != 0:
-    print(colored("You need to have root privileges to run this script.", "red"))
-    exit(1)
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --path)
+        path="$2"
+        shift 2
+        ;;
+      --url)
+        url="$2"
+        shift 2
+        ;;
+      --random)
+        random=true
+        shift
+        ;;
+      *)
+        echo "Invalid option: $1"
+        exit 1
+        ;;
+    esac
+  done
+}
 
-BACKUP_DIR = os.path.expanduser("~/arch_maintenance_backup")
+download() {
+  local url="$1"
+  local path="$2"
+  if command -v curl &>/dev/null; then
+    curl -s -L -o "$path" "$url"
+  elif command -v wget &>/dev/null; then
+    wget -q "$url" -O "$path"
+  else
+    echo "Error: Neither curl nor wget is installed. Cannot download wallpaper."
+    exit 1
+  fi
+}
 
-# Function to create backup of a file or directory
-def create_backup(path):
-    backup_name = get_backup_name(path)
-    backup_path = os.path.join(BACKUP_DIR, backup_name)
-    try:
-        shutil.copy2(path, backup_path)
-        print(colored(f"Created backup: {backup_name}", "green"))
-        return backup_path
-    except shutil.Error as e:
-        print(colored(f"Failed to create backup: {e}", "red"))
-        return None
+print_color() {
+  local msg="$1"
+  local code="$2"
+  echo -e "\033[${code}m${msg}\033[0m"
+}
 
-# Function to generate unique backup name based on timestamp
-def get_backup_name(path):
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    filename = os.path.basename(path)
-    backup_name = f"{filename}.{timestamp}.bak"
-    return backup_name
+exec_command() {
+  if "$@"; then
+    return 0
+  else
+    echo "Error executing command: $*"
+    return 1
+  fi
+}
 
-# Check for outdated packages
-outdated_packages = subprocess.run(["pacman", "-Qu"], capture_output=True, text=True)
-if outdated_packages.returncode == 0:
-    print(colored("Outdated packages found:", "yellow"))
-    print(outdated_packages.stdout)
-else:
-    print("No outdated packages found.")
+package_installed() {
+  local pkg="$1"
+  if exec_command pacman -Q "$pkg" &>/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}
 
-# Install packages
-if input("Install packages? (y/n): ").lower() == "y":
-    packages = input("Enter packages to install (default: pacman-mirrorlist): ")
-    packages = packages.strip() if packages.strip() != "" else "pacman-mirrorlist"
-    subprocess.run(["pacman", "-S", "--noconfirm", packages])
+dep_check() {
+  local dep="$1"
+  if ! command -v "$dep" &>/dev/null; then
+    print_color "$dep is missing. Installing it..." "1;33"
+    install "$dep"
+  fi
+}
 
-# System check
-if input("Perform system check? (y/n): ").lower() == "y":
-    # Check system logs
-    system_logs = subprocess.run(["journalctl", "-p", "err"], capture_output=True, text=True)
-    if system_logs.returncode == 0:
-        print(colored("System logs:", "yellow"))
-        print(system_logs.stdout)
-    else:
-        print("No system logs found.")
+install() {
+  local pkg="$1"
+  if package_installed "$pkg"; then
+    print_color "$pkg is already installed. Skipping..." "1;33"
+  else
+    if exec_command sudo pacman -S --noconfirm "$pkg"; then
+      print_color "$pkg installed successfully." "1;32"
+    else
+      print_color "Failed to install $pkg." "1;31"
+    fi
+  fi
+}
 
-    # Check for broken symbolic links
-    broken_links = [path for path, _, _ in os.walk(os.path.expanduser("~")) if os.path.islink(path) and not os.path.exists(path)]
-    if broken_links:
-        print(colored("Broken symbolic links found:", "yellow"))
-        for path in broken_links:
-            print(path)
-        if input("Remove broken symbolic links? (y/n): ").lower() == "y":
-            for path in broken_links:
-                os.remove(path)
-            print("Broken symbolic links removed.")
-    else:
-        print("No broken symbolic links found.")
+make_dir() {
+  local path="$1"
+  if [[ ! -d "$path" ]]; then
+    mkdir -p "$path"
+  fi
+}
 
-    # Get system information
-    uname = subprocess.run(["uname", "-sr"], capture_output=True, text=True).stdout.strip()
-    cpu_info = subprocess.run(["lscpu"], capture_output=True, text=True).stdout.strip()
-    mem_info = subprocess.run(["free", "-h"], capture_output=True, text=True).stdout.strip()
-    disk_info = subprocess.run(["df", "-h"], capture_output=True, text=True).stdout.strip()
+overwrite_prompt() {
+  local path="$1"
+  read -rp "$path already exists. Do you want to overwrite it? (yes/no): " response
+  case $response in
+    [Yy]|[Yy][Ee][Ss]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-    # Print system information
-    print(colored("System information:\n", "yellow"))
-    print(colored(f" {uname}", "cyan"))
-    print(colored(f" {cpu_info}", "cyan"))
-    print(colored(f" {mem_info}", "cyan"))
-    print(colored(f" {disk_info}", "cyan"))
+set_wallpaper() {
+  local path="$1"
+  local url="$2"
+  local random="$3"
 
-# System optimization
-if input("Perform system optimization? (y/n): ").lower() == "y":
-    print(colored("The following actions will be performed:", "cyan"))
-    print(colored("- Remove /tmp and /var/log directories", "yellow"))
-    print(colored("- Add recommended environment variables to .bashrc", "yellow"))
-    print(colored("- Update mirrorlist and package cache", "yellow"))
+  if [[ $random == true ]]; then
+    local img_paths=()
+    while IFS= read -r -d '' file; do
+      img_paths+=("$file")
+    done < <(find /usr/share/backgrounds -type f \( -iname "*.jpg" -o -iname "*.png" \) -print0)
 
-    if input("Are you sure you want to proceed? (y/n): ").lower() == "y":
-        # Remove redundant or old files
-        shutil.rmtree("/tmp", ignore_errors=True)
-        shutil.rmtree("/var/log", ignore_errors=True)
+    if [[ ${#img_paths[@]} -eq 0 ]]; then
+      echo "Error: No wallpaper files found in /usr/share/backgrounds."
+      return
+    fi
 
-        # Recommended environment variables
-        print(colored("Recommended environment variables:", "yellow"))
-        print(colored("export PATH=$PATH:/usr/local/bin", "cyan"))
-        print(colored("export PATH=$PATH:/usr/local/bin", "cyan"))
+    local random_img
+    random_img=${img_paths[RANDOM % ${#img_paths[@]}]}
+    feh --bg-scale "$random_img"
+  elif [[ -n $url ]]; then
+    download "$url" "$path"
+    feh --bg-scale "$path"
+  else
+    echo "Error: No wallpaper specified."
+    return
+  fi
+}
 
-        # Set environment variables
-        if input("Set recommended environment variables? (y/n): ").lower() == "y":
-            bashrc_path = os.path.expanduser("~/.bashrc")
-            backup_file = create_backup(bashrc_path)
-            if backup_file:
-                with open(bashrc_path, "a") as f:
-                    f.write("export PATH=$PATH:/usr/local/bin\n")
-                    f.write("export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib\n")
+handle_file() {
+  local path="$1"
+  local content="$2"
 
-        # Update mirrorlist
-        if input("Update mirrorlist? (y/n): ").lower() == "y":
-            mirrorlist_folder = "/etc/pacman.d/mirrorlist"
-            if not os.path.exists(mirrorlist_folder):
-                os.makedirs(mirrorlist_folder)
+  if [[ -f "$path" ]]; then
+    if overwrite_prompt "$path"; then
+      create_backup "$path"
+      echo "$content" > "$path"
+      print_color "$path overwritten." "1;32"
+    else
+      print_color "$path not overwritten. Skipped." "1;33"
+    fi
+  else
+    echo "$content" > "$path"
+    print_color "$path created." "1;32"
+  fi
+}
 
-            # Ask user to select one or more countries for repository host origin of mirrors
-            country_input = input("Enter country code(s) for repository host origin of mirrors (e.g. FR,GB): ")
-            if country_input == "":
-                country_input = "FI"  # default to Finland if no input provided
-            countries = country_input.upper().split(",")
-            print(colored(f"Selected country codes: {countries}", "yellow"))
+create_backup() {
+  local path="$1"
+  local backup_name
+  backup_name="$(basename "$path").$(date +"%Y%m%d%H%M%S").bak"
+  local backup_path="$BACKUP_DIR/$backup_name"
+  if cp "$path" "$backup_path"; then
+    print_color "Created backup: $backup_name" "1;32"
+  else
+    print_color "Failed to create backup: $backup_name" "1;33"
+  fi
+}
 
-            # Fetch mirrorlist from internet and pretty print available mirrors
-            response = subprocess.run(["curl", "-s", f"https://archlinux.org/mirrorlist/?country={','.join(countries)}&protocol=https&use_mirror_status=on"],
-                                    stdout=subprocess.PIPE)
-            mirrors = response.stdout.decode().split("\n")
-            for mirror in mirrors:
-                if mirror.startswith("Server = "):
-                    print(mirror)
+choose() {
+  local choices=("$@")
+  local msg="$1"
+  local i=1
+  echo "$msg"
+  for choice in "${choices[@]}"; do
+    echo "$i. $choice"
+    ((i++))
+  done
+  while true; do
+    read -rp "> " choice
+    if ((choice >= 1 && choice <= ${#choices[@]})); then
+      echo "${choices[choice - 1]}"
+      break
+    else
+      echo "Invalid choice. Please enter a number between 1 and ${#choices[@]}."
+    fi
+  done
+}
 
-            # Uncomment Finland mirrors
-            with open("/etc/pacman.d/mirrorlist.pacnew") as mirrors:
-                finland_mirrors = []
-                for line in mirrors:
-                    if line.startswith("#Server = http://mirror1.fin.mirror.archlinux.org/"):
-                        line = line.replace("#", "")
-                        finland_mirrors.append(line.strip())
-                    elif line.startswith("Server = http://mirror1.fin.mirror.archlinux.org/"):
-                        finland_mirrors.append(line.strip())
-            print(colored(f"Finland mirrors: {finland_mirrors}", "yellow"))
+main() {
+  parse_args "$@"
 
-            # Write selected mirrors to mirrorlist.new
-            with open(f"{mirrorlist_folder}/mirrorlist.new", "w") as f:
-                f.write("# Updated on " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
-                for mirror in finland_mirrors:
-                    response = os.system("ping -c 1 " + mirror.split("=")[1].strip())
-                    if response == 0:
-                        f.write(f"{mirror}\n")
-                        break
-                else:
-                    print(colored(f"Unable to find a working Finland mirror to update mirrorlist", "red"))
-                    exit(1)
+  make_dir "$BACKUP_DIR"
+
+  dep_check "xorg-server"
+  dep_check "bspwm"
+  dep_check "sxhkd"
+  dep_check "polybar"
+  dep_check "picom"
+  dep_check "feh"
+  dep_check "rofi"
+  dep_check "alacritty"
+  dep_check "dmenu"
+  dep_check "nitrogen"
+  dep_check "compton"
+
+  set_wallpaper "$path" "$url" "$random"
+
+  make_dir "$CONFIG_DIR/bspwm"
+  make_dir "$CONFIG_DIR/sxhkd"
+  make_dir "$CONFIG_DIR/rofi"
+  make_dir "$CONFIG_DIR/picom"
+
+  shell_options=("bash" "zsh" "fish")
+  default_shell=$(choose "${shell_options[@]}" "Select default shell:")
+  case $default_shell in
+    "bash")
+      handle_file "$HOME/.bashrc" "exec bspwm"
+      ;;
+    "zsh")
+      handle_file "$HOME/.zshrc" "exec bspwm"
+      ;;
+    "fish")
+      handle_file "$CONFIG_DIR/fish/config.fish" "exec bspwm"
+      ;;
+  esac
+
+  bspwmrc_content="#!/bin/bash
+sxhkd &
+polybar bspwm &
+picom -b &
+exec bspwm
+"
+
+  sxhkdrc_content="super + Return
+  alacritty
+super + Shift + q
+  bspc window -c
+super + {h,j,k,l}
+  bspc node -{focus,shift} {west,south,north,east}
+super + {Left,Down,Up,Right}
+  bspc node -{focus,shift} {west,south,north,east}
+super + d
+  rofi -show drun
+"
+
+  rofi_config_content="rofi.theme: Arc-Dark
+"
+
+  picom_config_content="backend = \"glx\";
+vsync = true;
+"
+
+  handle_file "$CONFIG_DIR/bspwm/bspwmrc" "$bspwmrc_content"
+  handle_file "$CONFIG_DIR/sxhkd/sxhkdrc" "$sxhkdrc_content"
+  handle_file "$CONFIG_DIR/rofi/config.rasi" "$rofi_config_content"
+  handle_file "$CONFIG_DIR/picom/picom.conf" "$picom_config_content"
+
+  xinitrc_path="$HOME/.xinitrc"
+  xinitrc_content="#!/bin/sh
+exec bspwm
+"
+
+  if [[ -f "$xinitrc_path" ]]; then
+    create_backup "$xinitrc_path"
+    echo "$xinitrc_content" > "$xinitrc_path"
+    chmod +x "$xinitrc_path"
+    print_color "$xinitrc_path overwritten." "1;32"
+  else
+    echo "$xinitrc_content" > "$xinitrc_path"
+    chmod +x "$xinitrc_path"
+    print_color "$xinitrc_path created." "1;32"
+  fi
+
+  # Start bspwm
+  startx
+}
+
+main "$@"
