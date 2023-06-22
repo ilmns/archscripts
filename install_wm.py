@@ -118,10 +118,16 @@ def install_dynamic_window_manager(dry_run=False):
 
 def install_additional_programs(config_file, dry_run=False):
     logging.info("Installing additional programs...")
-    with open(config_file) as f:
-        programs = json.load(f)
+    try:
+        with open(config_file) as f:
+            programs = json.load(f)
+    except FileNotFoundError:
+        logging.warning(f"Config file '{config_file}' not found. Creating an empty file.")
+        programs = []
+
     for program in programs:
         install_package(program, dry_run)
+
     logging.info("Additional programs installation completed.")
 
 
