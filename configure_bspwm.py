@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 
-import argparse, os, random, shutil, urllib.request, subprocess
+import argparse
+import os
+import random
+import shutil
+import subprocess
+import urllib.request
+import datetime
 
 CONFIG_DIR = os.path.expanduser("~/.config")
+BACKUP_DIR = os.path.expanduser("~/.config_backup")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Configure bspwm window manager.')
@@ -12,34 +19,41 @@ def parse_args():
     return parser.parse_args()
 
 def download(url, path):
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req) as response, open(path, 'wb') as out_file:
-        out_file.write(response.read())
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response, open(path, 'wb') as out_file:
+            out_file.write(response.read())
+    except urllib.error.URLError as e:
+        print(f"Failed to download wallpaper: {e}")
 
 def print_color(msg, code):
     print(f"\033[{code}m{msg}\033[0m")
 
 def exec_command(cmd, capture_output=False):
-    if capture_output:
-        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    else:
-        return subprocess.run(cmd, check=True)
+    try:
+        if capture_output:
+            return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        else:
+            return subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {e}")
+        return None
 
 def package_installed(pkg):
-    try:
-        result = exec_command(["pacman", "-Q", pkg], capture_output=True)
-        return result.returncode == 0
-    except subprocess.CalledProcessError:
-        return False
+    result = exec_command(["pacman", "-Q", pkg], capture_output=True)
+    return result is not None and result.returncode == 0
 
 def dep_check(dep):
     if not shutil.which(dep):
         print_color(f"{dep} is missing. Installing it...", "1;33")
-        return False
-    return True
+        install(dep)
 
 def install(pkg):
-    exec_command(["sudo", "pacman", "-S", "--noconfirm", pkg])
+    result = exec_command(["sudo", "pacman", "-S", "--noconfirm", pkg])
+    if result is not None:
+        print_color(f"{pkg} installed successfully.", "1;32")
+    else:
+        print_color(f"Failed to install {pkg}.", "1;31")
 
 def make_dir(path):
     if not os.path.exists(path):
@@ -51,7 +65,8 @@ def overwrite_prompt(path):
 
 def set_wallpaper(path, url=None, args=None):
     if args and args.random:
-        img_paths = [os.path.join(root, name) for root, dirs, files in os.walk("/usr/share/backgrounds") for name in files if name.endswith(".jpg")]
+        img_paths = [os.path.join(root, name) for root, dirs, files in os.walk("/usr/share/backgrounds") for name in
+                     files if name.endswith((".jpg", ".png"))]
         if not img_paths:
             print("Error: No wallpaper files found in /usr/share/backgrounds.")
             return
@@ -66,42 +81,67 @@ def set_wallpaper(path, url=None, args=None):
 
 def handle_file(path, content):
     if os.path.isfile(path):
-        if overwrite_prompt(path):
+        backup_file = create_backup(path)
+        if backup_file:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
             print_color(f"{path} overwritten.", "1;32")
         else:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-            print_color(f"{path} created.", "1;32")
+            print_color(f"{path} not overwritten. Failed to create backup.", "1;33")
+    else:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print_color(f"{path} created.", "1;32")
+
+def create_backup(path):
+    backup_name = get_backup_name(path)
+    backup_path = os.path.join(BACKUP_DIR, backup_name)
+    try:
+        shutil.copy2(path, backup_path)
+        print_color(f"Created backup: {backup_name}", "1;32")
+        return backup_path
+    except shutil.Error as e:
+        print(f"Failed to create backup: {e}")
+        return None
+
+def get_backup_name(path):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = os.path.basename(path)
+    backup_name = f"{filename}.{timestamp}.bak"
+    return backup_name
 
 def choose(choices, msg):
     print(msg)
     for i, choice in enumerate(choices):
-        print(f"{i+1}. {choice}")
+        print(f"{i + 1}. {choice}")
     while True:
         try:
             choice = int(input("> "))
-            if choice not in range(1, len(choices)+1):
+            if choice not in range(1, len(choices) + 1):
                 raise ValueError()
             break
         except ValueError:
             print("Invalid choice. Please enter a number between 1 and", len(choices))
-    return choices[choice-1]
+    return choices[choice - 1]
 
 def main():
     args = parse_args()
 
-    dependencies = ["xorg-server", "bspwm", "sxhkd", "polybar", "picom", "feh", "rofi", "alacritty", "dmenu"]
+    make_dir(BACKUP_DIR)
+
+    dep_check("xorg-server")
+    dep_check("bspwm")
+    dep_check("sxhkd")
+    dep_check("polybar")
+    dep_check("picom")
+    dep_check("feh")
+    dep_check("rofi")
+    dep_check("alacritty")
+    dep_check("dmenu")
+    dep_check("nitrogen")
+    dep_check("compton")
+
     set_wallpaper(args.path, args.url, args)
-
-    for dependency in dependencies:
-        package = dependency
-        if dependency == "alacritty":
-            package = "community/alacritty"
-
-        if not package_installed(package):
-            install(package)
 
     make_dir(os.path.join(CONFIG_DIR, "bspwm"))
     make_dir(os.path.join(CONFIG_DIR, "sxhkd"))
@@ -117,33 +157,31 @@ def main():
     elif default_shell == "fish":
         handle_file(os.path.expanduser("~/.config/fish/config.fish"), "exec bspwm")
 
-
     bspwmrc_content = """#!/bin/bash
-    sxhkd &
-    polybar bspwm &
-    picom -b &
-    feh --bg-scale /usr/share/backgrounds/xfce/Butterfly.jpg
-    exec bspwm
-    """
+sxhkd &
+polybar bspwm &
+picom -b &
+exec bspwm
+"""
 
     sxhkdrc_content = """super + Return
-        alacritty
-    super + Shift + q
-        bspc window -c
-    super + {h,j,k,l}
-        bspc node -{focus,shift} {left,down,up,right}
-    super + {Left,Down,Up,Right}
-        bspc node -{focus,shift} {west,south,north,east}
-    super + d
-        rofi -show drun
-    """
+    alacritty
+super + Shift + q
+    bspc window -c
+super + {h,j,k,l}
+    bspc node -{focus,shift} {west,south,north,east}
+super + {Left,Down,Up,Right}
+    bspc node -{focus,shift} {west,south,north,east}
+super + d
+    rofi -show drun
+"""
 
     rofi_config_content = """rofi.theme: Arc-Dark
-    """
+"""
 
     picom_config_content = """backend = "glx";
-    vsync = true;
-    """
+vsync = true;
+"""
 
     handle_file(os.path.join(CONFIG_DIR, "bspwm/bspwmrc"), bspwmrc_content)
     handle_file(os.path.join(CONFIG_DIR, "sxhkd/sxhkdrc"), sxhkdrc_content)
@@ -152,22 +190,23 @@ def main():
 
     xinitrc_path = os.path.expanduser("~/.xinitrc")
     xinitrc_content = """#!/bin/sh
-    exec bspwm
-    """
+exec bspwm
+"""
 
     if os.path.isfile(xinitrc_path):
-        if overwrite_prompt(xinitrc_path):
+        backup_file = create_backup(xinitrc_path)
+        if backup_file:
             with open(xinitrc_path, "w", encoding="utf-8") as file:
                 file.write(xinitrc_content)
             os.chmod(xinitrc_path, 0o755)
             print_color("~/.xinitrc overwritten.", "1;32")
+        else:
+            print_color("~/.xinitrc not overwritten. Failed to create backup.", "1;33")
     else:
         with open(xinitrc_path, "w", encoding="utf-8") as file:
             file.write(xinitrc_content)
         os.chmod(xinitrc_path, 0o755)
         print_color("~/.xinitrc created.", "1;32")
 
-
 if __name__ == "__main__":
     main()
-
