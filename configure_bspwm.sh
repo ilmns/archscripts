@@ -2,6 +2,9 @@
 
 CONFIG_DIR="$HOME/.config"
 BACKUP_DIR="$HOME/.config_backup"
+WALLPAPER_DIR="/usr/share/backgrounds"
+DEFAULT_WALLPAPER_URL="https://wallpapercave.com/wp/wp1351922.png"
+DEFAULT_WALLPAPER_PATH="$WALLPAPER_DIR/default_wallpaper.png"
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
@@ -109,10 +112,12 @@ set_wallpaper() {
     local img_paths=()
     while IFS= read -r -d '' file; do
       img_paths+=("$file")
-    done < <(find /usr/share/backgrounds -type f \( -iname "*.jpg" -o -iname "*.png" \) -print0)
+    done < <(find "$WALLPAPER_DIR" -type f \( -iname "*.jpg" -o -iname "*.png" \) -print0)
 
     if [[ ${#img_paths[@]} -eq 0 ]]; then
-      echo "Error: No wallpaper files found in /usr/share/backgrounds."
+      echo "No wallpaper files found in $WALLPAPER_DIR. Downloading default wallpaper..."
+      download "$DEFAULT_WALLPAPER_URL" "$DEFAULT_WALLPAPER_PATH"
+      feh --bg-scale "$DEFAULT_WALLPAPER_PATH"
       return
     fi
 
@@ -123,9 +128,8 @@ set_wallpaper() {
     download "$url" "$path"
     feh --bg-scale "$path"
   else
-    # No wallpaper specified, set a default wallpaper here
-    local default_wallpaper="/path/to/default/wallpaper.jpg"
-    feh --bg-scale "$default_wallpaper"
+    echo "Error: No wallpaper specified."
+    return
   fi
 }
 
