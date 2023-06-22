@@ -208,5 +208,8 @@ exec bspwm
         os.chmod(xinitrc_path, 0o755)
         print_color("~/.xinitrc created.", "1;32")
 
+    # Start bspwm
+    subprocess.run(["startx"])
+
 if __name__ == "__main__":
     main()
