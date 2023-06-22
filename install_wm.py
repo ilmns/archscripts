@@ -51,7 +51,7 @@ def configure_i3wm():
 
 
 def install_desktop_manager(dry_run=False):
-    options = ["xfce", "gnome", "kde", "mate"]
+    options = ["xfce", "gnome", "kde", "mate", "lxde"]
     desktop_manager = prompt_user(f"Select the desktop manager to install ({'/'.join(options)}): ", options)
     install_package(desktop_manager, dry_run)
     if desktop_manager == "gnome":
@@ -70,6 +70,11 @@ def install_desktop_manager(dry_run=False):
         logging.info("Configuring MATE...")
         # Additional configuration steps for MATE
         logging.info("MATE configuration completed.")
+    elif desktop_manager == "lxde":
+        logging.info("Configuring LXDE...")
+        install_package("lxde", dry_run)
+        # Additional configuration steps for LXDE
+        logging.info("LXDE configuration completed.")
 
 
 def install_window_manager(dry_run=False):
