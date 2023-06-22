@@ -16,6 +16,7 @@ def run_command(command):
         logging.error(e.output.decode())
         raise
 
+
 # Function to install LightDM and LightDM greeter
 def install_lightdm():
     logging.info("Installing LightDM...")
@@ -24,6 +25,7 @@ def install_lightdm():
     # Enable LightDM service to start on boot
     run_command("sudo systemctl enable lightdm")
     logging.info("LightDM installation completed.")
+
 
 # Function to install BSPWM window manager and SXHKD hotkey daemon
 def install_bspwm():
@@ -44,6 +46,7 @@ def configure_lightdm():
     # Make the Xsession file executable
     run_command("sudo chmod +x /etc/lightdm/Xsession")
     logging.info("LightDM configuration completed.")
+
 
 # Function to install i3 window manager and i3status
 def install_i3wm():
@@ -72,6 +75,28 @@ def install_gnome():
     run_command("sudo pacman -S gnome")
     logging.info("GNOME installation completed.")
 
+
+# Function to install dwm window manager
+def install_dwm():
+    logging.info("Installing dwm...")
+    # Install dwm using the package manager
+    run_command("sudo pacman -S dwm")
+    logging.info("dwm installation completed.")
+
+# Function to install awesome window manager
+def install_awesome():
+    logging.info("Installing awesome...")
+    # Install awesome using the package manager
+    run_command("sudo pacman -S awesome")
+    logging.info("awesome installation completed.")
+
+# Function to install xmonad window manager
+def install_xmonad():
+    logging.info("Installing xmonad...")
+    # Install xmonad using the package manager
+    run_command("sudo pacman -S xmonad")
+    logging.info("xmonad installation completed.")
+
 # Function to install additional programs from a JSON config file
 def install_additional_programs(config_file):
     logging.info("Installing additional programs...")
@@ -82,6 +107,7 @@ def install_additional_programs(config_file):
     for program in programs:
         run_command(f"sudo pacman -S {program}")
     logging.info("Additional programs installation completed.")
+
 
 # Function to configure additional programs
 def configure_additional_programs():
@@ -125,12 +151,18 @@ def cleanup():
     # Add cleanup steps here, if necessary
     logging.info("Cleanup completed.")
 
+
 # Function to prompt the user for input with given message and options
 def prompt_user(message, options):
     user_input = ""
     while user_input not in options:
         user_input = input(message)
     return user_input
+
+
+
+# Main function
+
 
 # Main function
 if __name__ == "__main__":
@@ -145,16 +177,27 @@ if __name__ == "__main__":
             install_gnome()
 
         # Prompt the user to select the window manager to install
-        install_window_manager = prompt_user("Select the window manager to install (lightdm/bspwm/i3wm): ", ["lightdm", "bspwm", "i3wm"])
+        install_window_manager = prompt_user("Select the window manager to install (lightdm/bspwm/i3wm/other): ", ["lightdm", "bspwm", "i3wm", "other"])
         if install_window_manager == "lightdm":
             install_lightdm()
+            configure_lightdm()
         elif install_window_manager == "bspwm":
             install_bspwm()
+            # Additional configuration steps for BSPWM
         elif install_window_manager == "i3wm":
             install_i3wm()
-
-        # Configure LightDM
-        configure_lightdm()
+            configure_i3wm()
+        elif install_window_manager == "other":
+            install_other_tiling_window_manager = prompt_user("Enter the name of the tiling window manager to install (dwm/awesome/xmonad): ", ["dwm", "awesome", "xmonad"])
+            if install_other_tiling_window_manager == "dwm":
+                install_dwm()
+                # Additional configuration steps for dwm
+            elif install_other_tiling_window_manager == "awesome":
+                install_awesome()
+                # Additional configuration steps for awesome
+            elif install_other_tiling_window_manager == "xmonad":
+                install_xmonad()
+                # Additional configuration steps for xmonad
 
         # Install additional programs from the config file
         install_additional_programs("additional_programs.json")
@@ -178,4 +221,3 @@ if __name__ == "__main__":
     finally:
         # Clean up any resources or temporary files
         cleanup()
-
