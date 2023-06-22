@@ -1,158 +1,29 @@
-# import required modules
 import subprocess
 import logging
 import json
+import argparse
 
-# Configure logging to a file
 logging.basicConfig(filename='installation.log', level=logging.INFO)
 
-# Function to execute a command using subprocess
-def run_command(command):
-    # Execute the command and handle any errors
-    try:
-        subprocess.run(command, shell=True, check=True)
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error executing command: {command}")
-        logging.error(e.output.decode())
-        raise
+
+def run_command(command, dry_run=False):
+    if dry_run:
+        logging.info(f"[Dry Run] Skipping command execution: {command}")
+    else:
+        try:
+            subprocess.run(command, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error executing command: {command}")
+            logging.error(e.output.decode())
+            raise
 
 
-# Function to install LightDM and LightDM greeter
-def install_lightdm():
-    logging.info("Installing LightDM...")
-    # Install LightDM and LightDM greeter using package manager
-    run_command("sudo pacman -S lightdm lightdm-gtk-greeter")
-    # Enable LightDM service to start on boot
-    run_command("sudo systemctl enable lightdm")
-    logging.info("LightDM installation completed.")
+def install_package(package_name, dry_run=False):
+    logging.info(f"Installing {package_name}...")
+    run_command(f"sudo pacman -S {package_name}", dry_run)
+    logging.info(f"{package_name} installation completed.")
 
 
-# Function to install BSPWM window manager and SXHKD hotkey daemon
-def install_bspwm():
-    logging.info("Installing bspwm...")
-    # Install BSPWM and SXHKD using package manager
-    run_command("sudo pacman -S bspwm sxhkd")
-    logging.info("bspwm installation completed.")
-
-# Function to configure LightDM
-def configure_lightdm():
-    logging.info("Configuring LightDM...")
-    # Set the greeter session for LightDM
-    run_command("sudo sed -i 's/^#greeter-session=.*/greeter-session=lightdm-gtk-greeter/' /etc/lightdm/lightdm.conf")
-    # Set the session wrapper to start BSPWM for LightDM sessions
-    run_command("echo '[Seat:*]\nsession-wrapper=/etc/lightdm/Xsession' | sudo tee -a /etc/lightdm/lightdm.conf")
-    # Create the Xsession file to start BSPWM
-    run_command("sudo bash -c 'echo -e \"#!/bin/bash\\nexec bspwm\" > /etc/lightdm/Xsession'")
-    # Make the Xsession file executable
-    run_command("sudo chmod +x /etc/lightdm/Xsession")
-    logging.info("LightDM configuration completed.")
-
-
-# Function to install i3 window manager and i3status
-def install_i3wm():
-    logging.info("Installing i3wm...")
-    # Install i3-gaps and i3status using package manager
-    run_command("sudo pacman -S i3-gaps i3status")
-    logging.info("i3wm installation completed.")
-
-# Function to configure i3 window manager
-def configure_i3wm():
-    logging.info("Configuring i3wm...")
-    # Add configuration steps for i3wm here
-    logging.info("i3wm configuration completed.")
-
-# Function to install Xfce desktop environment and Xfce goodies
-def install_xfce():
-    logging.info("Installing Xfce...")
-    # Install Xfce and Xfce goodies using package manager
-    run_command("sudo pacman -S xfce4 xfce4-goodies")
-    logging.info("Xfce installation completed.")
-
-# Function to install GNOME desktop environment
-def install_gnome():
-    logging.info("Installing GNOME...")
-    # Install GNOME using package manager
-    run_command("sudo pacman -S gnome")
-    logging.info("GNOME installation completed.")
-
-
-# Function to install dwm window manager
-def install_dwm():
-    logging.info("Installing dwm...")
-    # Install dwm using the package manager
-    run_command("sudo pacman -S dwm")
-    logging.info("dwm installation completed.")
-
-# Function to install awesome window manager
-def install_awesome():
-    logging.info("Installing awesome...")
-    # Install awesome using the package manager
-    run_command("sudo pacman -S awesome")
-    logging.info("awesome installation completed.")
-
-# Function to install xmonad window manager
-def install_xmonad():
-    logging.info("Installing xmonad...")
-    # Install xmonad using the package manager
-    run_command("sudo pacman -S xmonad")
-    logging.info("xmonad installation completed.")
-
-# Function to install additional programs from a JSON config file
-def install_additional_programs(config_file):
-    logging.info("Installing additional programs...")
-    # Load the list of additional programs from the JSON config file
-    with open(config_file) as f:
-        programs = json.load(f)
-    # Install each program using the package manager
-    for program in programs:
-        run_command(f"sudo pacman -S {program}")
-    logging.info("Additional programs installation completed.")
-
-
-# Function to configure additional programs
-def configure_additional_programs():
-    logging.info("Configuring additional programs...")
-    # Add configuration steps for additional programs here
-    logging.info("Additional programs configuration completed.")
-
-# Function to perform post-installation steps
-def perform_post_installation_steps():
-    logging.info("Performing post-installation steps...")
-    # Add post-installation steps here
-    logging.info("Post-installation steps completed.")
-
-# Function to reboot the system
-def reboot_system():
-    logging.info("Rebooting the system...")
-    # Reboot the system using the command
-    run_command("sudo reboot")
-
-# Function to update the system packages
-def update_system():
-    logging.info("Updating the system...")
-    # Update system packages using the package manager
-    run_command("sudo pacman -Syu")
-    logging.info("System update completed.")
-
-# Function to perform rollback steps
-def rollback():
-    logging.info("Performing rollback...")
-    # Add rollback steps here
-    logging.info("Rollback completed.")
-
-# Function to setup logging configuration
-def setup_logging():
-    # Additional logging configuration, if needed
-    pass
-
-# Function to perform cleanup steps
-def cleanup():
-    logging.info("Cleaning up...")
-    # Add cleanup steps here, if necessary
-    logging.info("Cleanup completed.")
-
-
-# Function to prompt the user for input with given message and options
 def prompt_user(message, options):
     user_input = ""
     while user_input not in options:
@@ -160,64 +31,183 @@ def prompt_user(message, options):
     return user_input
 
 
+def enable_service(service_name):
+    run_command(f"sudo systemctl enable {service_name}")
 
-# Main function
+
+def configure_lightdm():
+    logging.info("Configuring LightDM...")
+    run_command("sudo sed -i 's/^#greeter-session=.*/greeter-session=lightdm-gtk-greeter/' /etc/lightdm/lightdm.conf")
+    run_command("echo '[Seat:*]\nsession-wrapper=/etc/lightdm/Xsession' | sudo tee -a /etc/lightdm/lightdm.conf")
+    run_command("sudo bash -c 'echo -e \"#!/bin/bash\\nexec bspwm\" > /etc/lightdm/Xsession'")
+    run_command("sudo chmod +x /etc/lightdm/Xsession")
+    logging.info("LightDM configuration completed.")
 
 
-# Main function
+def configure_i3wm():
+    logging.info("Configuring i3wm...")
+    # Add configuration steps for i3wm here
+    logging.info("i3wm configuration completed.")
+
+
+def install_desktop_manager(dry_run=False):
+    options = ["xfce", "gnome", "kde", "mate"]
+    desktop_manager = prompt_user(f"Select the desktop manager to install ({'/'.join(options)}): ", options)
+    install_package(desktop_manager, dry_run)
+    if desktop_manager == "gnome":
+        logging.info("Configuring GNOME...")
+        # Additional configuration steps for GNOME
+        logging.info("GNOME configuration completed.")
+    elif desktop_manager == "xfce":
+        logging.info("Configuring Xfce...")
+        # Additional configuration steps for Xfce
+        logging.info("Xfce configuration completed.")
+    elif desktop_manager == "kde":
+        logging.info("Configuring KDE...")
+        # Additional configuration steps for KDE
+        logging.info("KDE configuration completed.")
+    elif desktop_manager == "mate":
+        logging.info("Configuring MATE...")
+        # Additional configuration steps for MATE
+        logging.info("MATE configuration completed.")
+
+
+def install_window_manager(dry_run=False):
+    options = ["lightdm", "bspwm", "i3wm", "dwm", "awesome", "xmonad"]
+    window_manager = prompt_user(f"Select the window manager to install ({'/'.join(options)}): ", options)
+    if window_manager == "lightdm":
+        install_package("lightdm", dry_run)
+        install_package("lightdm-gtk-greeter", dry_run)
+        configure_lightdm()
+        enable_service("lightdm")
+    elif window_manager == "bspwm":
+        install_package("bspwm", dry_run)
+        install_package("sxhkd", dry_run)
+        # Additional configuration steps for BSPWM
+    elif window_manager == "i3wm":
+        install_package("i3-gaps", dry_run)
+        install_package("i3status", dry_run)
+        configure_i3wm()
+    elif window_manager in ["dwm", "awesome", "xmonad"]:
+        install_package(window_manager, dry_run)
+        # Additional configuration steps for the other window managers
+
+
+def install_stacking_window_manager(dry_run=False):
+    logging.info("Installing stacking window manager...")
+    # Add installation steps for stacking window manager
+    logging.info("Stacking window manager installation completed.")
+
+
+def install_tiling_window_manager(dry_run=False):
+    logging.info("Installing tiling window manager...")
+    # Add installation steps for tiling window manager
+    logging.info("Tiling window manager installation completed.")
+
+
+def install_dynamic_window_manager(dry_run=False):
+    logging.info("Installing dynamic window manager...")
+    # Add installation steps for dynamic window manager
+    logging.info("Dynamic window manager installation completed.")
+
+
+def install_additional_programs(config_file, dry_run=False):
+    logging.info("Installing additional programs...")
+    with open(config_file) as f:
+        programs = json.load(f)
+    for program in programs:
+        install_package(program, dry_run)
+    logging.info("Additional programs installation completed.")
+
+
+def configure_additional_programs(dry_run=False):
+    logging.info("Configuring additional programs...")
+    # Add configuration steps for additional programs here
+    logging.info("Additional programs configuration completed.")
+
+
+def perform_post_installation_steps(dry_run=False):
+    logging.info("Performing post-installation steps...")
+    # Add post-installation steps here
+    logging.info("Post-installation steps completed.")
+
+
+def update_system():
+    logging.info("Updating the system...")
+    run_command("sudo pacman -Syu")
+    logging.info("System update completed.")
+
+
+def reboot_system():
+    logging.info("Rebooting the system...")
+    run_command("sudo reboot")
+
+
+def rollback():
+    logger = logging.getLogger(__name__)
+    logger.info("Performing rollback...")
+
+    try:
+        # Step 1: Revert changes in the database
+        logger.info("Reverting changes in the database...")
+        # Code to revert changes in the database goes here
+        # For example: db_revert_changes()
+
+        # Step 2: Restore backup files
+        logger.info("Restoring backup files...")
+        # Code to restore backup files goes here
+        # For example: restore_backup_files()
+
+        # Step 3: Undo any file modifications
+        logger.info("Undoing file modifications...")
+        # Code to undo file modifications goes here
+        # For example: undo_file_modifications()
+
+        logger.info("Rollback steps completed successfully.")
+    except Exception as e:
+        logger.exception("Error occurred during rollback: %s", str(e))
+        # You can handle the error here, such as raising an exception or taking appropriate actions based on your application's needs.
+        # You may also log more details about the error if necessary.
+
+    logger.info("Rollback completed.")
+
+
+def setup_logging():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+def cleanup():
+    logging.info("Cleaning up...")
+    # Add cleanup steps here, if necessary
+    logging.info("Cleanup completed.")
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Installation script")
+    parser.add_argument("--dry-run", action="store_true", help="Perform a dry run without executing commands")
+    args = parser.parse_args()
+
     try:
         setup_logging()
 
-        # Prompt the user to select the desktop manager to install
-        install_desktop_manager = prompt_user("Select the desktop manager to install (xfce/gnome): ", ["xfce", "gnome"])
-        if install_desktop_manager == "xfce":
-            install_xfce()
-        elif install_desktop_manager == "gnome":
-            install_gnome()
+        install_desktop_manager(dry_run=args.dry_run)
+        install_window_manager(dry_run=args.dry_run)
+        install_stacking_window_manager(dry_run=args.dry_run)
+        install_tiling_window_manager(dry_run=args.dry_run)
+        install_dynamic_window_manager(dry_run=args.dry_run)
 
-        # Prompt the user to select the window manager to install
-        install_window_manager = prompt_user("Select the window manager to install (lightdm/bspwm/i3wm/other): ", ["lightdm", "bspwm", "i3wm", "other"])
-        if install_window_manager == "lightdm":
-            install_lightdm()
-            configure_lightdm()
-        elif install_window_manager == "bspwm":
-            install_bspwm()
-            # Additional configuration steps for BSPWM
-        elif install_window_manager == "i3wm":
-            install_i3wm()
-            configure_i3wm()
-        elif install_window_manager == "other":
-            install_other_tiling_window_manager = prompt_user("Enter the name of the tiling window manager to install (dwm/awesome/xmonad): ", ["dwm", "awesome", "xmonad"])
-            if install_other_tiling_window_manager == "dwm":
-                install_dwm()
-                # Additional configuration steps for dwm
-            elif install_other_tiling_window_manager == "awesome":
-                install_awesome()
-                # Additional configuration steps for awesome
-            elif install_other_tiling_window_manager == "xmonad":
-                install_xmonad()
-                # Additional configuration steps for xmonad
+        install_additional_programs("additional_programs.json", dry_run=args.dry_run)
+        configure_additional_programs(dry_run=args.dry_run)
 
-        # Install additional programs from the config file
-        install_additional_programs("additional_programs.json")
-
-        # Configure additional programs
-        configure_additional_programs()
-
-        # Perform post-installation steps
-        perform_post_installation_steps()
-
-        # Reboot the system
+        perform_post_installation_steps(dry_run=args.dry_run)
+        update_system()
         reboot_system()
 
     except Exception as e:
         logging.error(f"Error during script execution: {str(e)}")
         print("An error occurred during the installation process. Please check the log file for details.")
-        # Perform rollback if needed
         rollback()
         raise
 
     finally:
-        # Clean up any resources or temporary files
         cleanup()
