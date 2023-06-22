@@ -54,6 +54,7 @@ def install_desktop_manager(dry_run=False):
     options = ["xfce", "gnome", "kde", "mate", "lxde"]
     desktop_manager = prompt_user(f"Select the desktop manager to install ({'/'.join(options)}): ", options)
     install_package(desktop_manager, dry_run)
+    
     if desktop_manager == "gnome":
         logging.info("Configuring GNOME...")
         # Additional configuration steps for GNOME
@@ -80,6 +81,7 @@ def install_desktop_manager(dry_run=False):
 def install_window_manager(dry_run=False):
     options = ["lightdm", "bspwm", "i3wm", "dwm", "awesome", "xmonad"]
     window_manager = prompt_user(f"Select the window manager to install ({'/'.join(options)}): ", options)
+    
     if window_manager == "lightdm":
         install_package("lightdm", dry_run)
         install_package("lightdm-gtk-greeter", dry_run)
@@ -118,6 +120,7 @@ def install_dynamic_window_manager(dry_run=False):
 
 def install_additional_programs(config_file, dry_run=False):
     logging.info("Installing additional programs...")
+    
     try:
         with open(config_file) as f:
             programs = json.load(f)
