@@ -1,179 +1,270 @@
-import os
-import shutil
-import subprocess
+#!/bin/bash
 
-# Function to print colored messages
-def print_colored(msg, color_code):
-    print(f"\033[{color_code}m{msg}\033[0m")
+CONFIG_DIR="$HOME/.config"
+BACKUP_DIR="$HOME/.config_backup"
 
-# Function to run a command and handle success/failure outputs
-def run_command(command, success_msg, fail_msg, color_code):
-    result = subprocess.run(command)
-    if result.returncode == 0:
-        print_colored(success_msg, color_code)
-    else:
-        print_colored(fail_msg, "1;31")
-        exit(1)
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --path)
+        path="$2"
+        shift 2
+        ;;
+      --url)
+        url="$2"
+        shift 2
+        ;;
+      --random)
+        random=true
+        shift
+        ;;
+      *)
+        echo "Invalid option: $1"
+        exit 1
+        ;;
+    esac
+  done
+}
 
-# Function to install a package from official repositories
-def install_package(package):
-    run_command(["sudo", "pacman", "-S", "--noconfirm", package],
-                f"{package} installed successfully!",
-                f"Failed to install {package}.",
-                "1;32")
+download() {
+  local url="$1"
+  local path="$2"
+  if command -v curl &>/dev/null; then
+    curl -s -L -o "$path" "$url"
+  elif command -v wget &>/dev/null; then
+    wget -q "$url" -O "$path"
+  else
+    echo "Error: Neither curl nor wget is installed. Cannot download wallpaper."
+    exit 1
+  fi
+}
 
-# Function to install a package from AUR
-def install_aur_package(package):
-    run_command(["yay", "-S", "--noconfirm", package],
-                f"{package} installed successfully!",
-                f"Failed to install {package}.",
-                "1;32")
+print_color() {
+  local msg="$1"
+  local code="$2"
+  echo -e "\033[${code}m${msg}\033[0m"
+}
 
-# Function to backup a file
-def backup_file(file):
-    if os.path.isfile(file):
-        backup = f"{file}.bak"
-        print_colored(f"Backing up {file} to {backup}...", "1;34")
-        shutil.copy(file, backup)
+exec_command() {
+  if "$@"; then
+    return 0
+  else
+    echo "Error executing command: $*"
+    return 1
+  fi
+}
 
-# Function to update system packages
-def update_packages():
-    print_colored("Updating system packages...", "1;34")
-    run_command(["sudo", "pacman", "-Syu", "--noconfirm"],
-                "System packages updated successfully!",
-                "Failed to update system packages.",
-                "1;32")
+package_installed() {
+  local pkg="$1"
+  if exec_command pacman -Q "$pkg" &>/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}
 
-# Function to update AUR packages
-def update_aur_packages():
-    print_colored("Updating AUR packages...", "1;34")
-    run_command(["yay", "-Syu", "--noconfirm"],
-                "AUR packages updated successfully!",
-                "Failed to update AUR packages.",
-                "1;32")
+dep_check() {
+  local dep="$1"
+  if ! command -v "$dep" &>/dev/null; then
+    print_color "$dep is missing. Installing it..." "1;33"
+    install "$dep"
+  fi
+}
 
-# Function to install necessary packages
-def install_packages(packages):
-    for package in packages:
-        install_package(package)
+install() {
+  local pkg="$1"
+  if package_installed "$pkg"; then
+    print_color "$pkg is already installed. Skipping..." "1;33"
+  else
+    if exec_command sudo pacman -S --noconfirm "$pkg"; then
+      print_color "$pkg installed successfully." "1;32"
+    else
+      print_color "Failed to install $pkg." "1;31"
+    fi
+  fi
+}
 
-# Function to install yay if it isn't installed
-def install_yay():
-    if shutil.which('yay') is None:
-        print_colored("Installing Yay...", "1;34")
-        if subprocess.run(["git", "clone", "https://aur.archlinux.org/yay.git"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-            os.chdir("yay")
-            run_command(["makepkg", "-si", "--noconfirm"], "Yay installed successfully!", "Failed to install Yay.", "1;32")
-            os.chdir("..")
-            shutil.rmtree("yay")
-        else:
-            print_colored("Failed to clone Yay from git. Please check your internet connection.", "1;31")
-            exit(1)
+make_dir() {
+  local path="$1"
+  if [[ ! -d "$path" ]]; then
+    mkdir -p "$path"
+  fi
+}
 
-# Function to create necessary directories
-def create_directories(directories):
-    for directory in directories:
-        os.makedirs(os.path.expanduser(directory), exist_ok=True)
+overwrite_prompt() {
+  local path="$1"
+  read -rp "$path already exists. Do you want to overwrite it? (yes/no): " response
+  case $response in
+    [Yy]|[Yy][Ee][Ss]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-# Function to write config files
-def write_config_file(file, content, mode=0o755):
-    with open(os.path.expanduser(file), "w") as f:
-        f.write(content)
-    os.chmod(os.path.expanduser(file), mode)
+set_wallpaper() {
+  local path="$1"
+  local url="$2"
+  local random="$3"
 
-# Function to update .xinitrc with startup commands
-def update_xinitrc(commands):
-    with open(os.path.expanduser("~/.xinitrc"), "a") as f:
-        for command in commands:
-            f.write(f"exec {command}\n")
+  if [[ $random == true ]]; then
+    local img_paths=()
+    while IFS= read -r -d '' file; do
+      img_paths+=("$file")
+    done < <(find /usr/share/backgrounds -type f \( -iname "*.jpg" -o -iname "*.png" \) -print0)
 
-# Function to select bspwm as the default window manager
-def select_bspwm():
-    lightdm_conf_file = "/etc/lightdm/lightdm.conf"
-    lightdm_conf_backup = "/etc/lightdm/lightdm.conf.bak"
-    lightdm_conf_modified = "/etc/lightdm/lightdm.conf.modified"
+    if [[ ${#img_paths[@]} -eq 0 ]]; then
+      echo "Error: No wallpaper files found in /usr/share/backgrounds."
+      return
+    fi
 
-    # Backup original lightdm.conf if not already backed up
-    if not os.path.isfile(lightdm_conf_backup):
-        shutil.copy(lightdm_conf_file, lightdm_conf_backup)
+    local random_img
+    random_img=${img_paths[RANDOM % ${#img_paths[@]}]}
+    feh --bg-scale "$random_img"
+  elif [[ -n $url ]]; then
+    download "$url" "$path"
+    feh --bg-scale "$path"
+  else
+    echo "Error: No wallpaper specified."
+    return
+  fi
+}
 
-    # Modify lightdm.conf to use bspwm as the default window manager
-    with open(lightdm_conf_file, "r") as original_file, open(lightdm_conf_modified, "w") as modified_file:
-        for line in original_file:
-            if line.strip().startswith("exec"):
-                modified_file.write("exec bspwm\n")
-            else:
-                modified_file.write(line)
+handle_file() {
+  local path="$1"
+  local content="$2"
 
-    # Replace original lightdm.conf with the modified version
-    shutil.move(lightdm_conf_modified, lightdm_conf_file)
+  if [[ -f "$path" ]]; then
+    if overwrite_prompt "$path"; then
+      create_backup "$path"
+      echo "$content" > "$path"
+      print_color "$path overwritten." "1;32"
+    else
+      print_color "$path not overwritten. Skipped." "1;33"
+    fi
+  else
+    echo "$content" > "$path"
+    print_color "$path created." "1;32"
+  fi
+}
 
-    print_colored("bspwm selected as the default window manager.", "1;32")
+create_backup() {
+  local path="$1"
+  local backup_name
+  backup_name="$(basename "$path").$(date +"%Y%m%d%H%M%S").bak"
+  local backup_path="$BACKUP_DIR/$backup_name"
+  if cp "$path" "$backup_path"; then
+    print_color "Created backup: $backup_name" "1;32"
+  else
+    print_color "Failed to create backup: $backup_name" "1;33"
+  fi
+}
 
-def main():
-    # Update system and AUR packages
-    update_packages()
-    update_aur_packages()
+choose() {
+  local choices=("$@")
+  local msg="$1"
+  local i=1
+  echo "$msg"
+  for choice in "${choices[@]}"; do
+    echo "$i. $choice"
+    ((i++))
+  done
+  while true; do
+    read -rp "> " choice
+    if ((choice >= 1 && choice <= ${#choices[@]})); then
+      echo "${choices[choice - 1]}"
+      break
+    else
+      echo "Invalid choice. Please enter a number between 1 and ${#choices[@]}."
+    fi
+  done
+}
 
-    # Install necessary packages
-    packages = ["xorg-server", "bspwm", "sxhkd", "polybar", "picom", "feh", "rofi", "dunst"]
-    install_packages(packages)
+main() {
+  parse_args "$@"
 
-    # Install yay
-    install_yay()
+  make_dir "$BACKUP_DIR"
 
-    # Install polybar-bspwm from AUR
-    install_aur_package("polybar-bspwm")
+  dep_check "xorg-server"
+  dep_check "bspwm"
+  dep_check "sxhkd"
+  dep_check "polybar"
+  dep_check "picom"
+  dep_check "feh"
+  dep_check "rofi"
+  dep_check "alacritty"
+  dep_check "dmenu"
+  dep_check "nitrogen"
+  dep_check "compton"
 
-    # Create necessary directories
-    directories = ["~/.config/bspwm", "~/.config/sxhkd"]
-    create_directories(directories)
+  set_wallpaper "$path" "$url" "$random"
 
-    # Backup existing config files
-    backup_file("~/.config/bspwm/bspwmrc")
-    backup_file("~/.config/sxhkd/sxhkdrc")
+  make_dir "$CONFIG_DIR/bspwm"
+  make_dir "$CONFIG_DIR/sxhkd"
+  make_dir "$CONFIG_DIR/rofi"
+  make_dir "$CONFIG_DIR/picom"
 
-    bspwmrc_content = """#!/bin/bash
-    sxhkd &
-    polybar bspwm &
-    dunst &
-    exec bspwm
-    """
+  shell_options=("bash" "zsh" "fish")
+  default_shell=$(choose "${shell_options[@]}" "Select default shell:")
+  case $default_shell in
+    "bash")
+      handle_file "$HOME/.bashrc" "exec bspwm"
+      ;;
+    "zsh")
+      handle_file "$HOME/.zshrc" "exec bspwm"
+      ;;
+    "fish")
+      handle_file "$CONFIG_DIR/fish/config.fish" "exec bspwm"
+      ;;
+  esac
 
-    sxhkdrc_content = """super + Return
-        alacritty
-    super + Shift + q
-        bspc window -c
-    super + {h,j,k,l}
-        bspc node -{f,s} {left,down,up,right}
-    super + {Left,Down,Up,Right}
-        bspc node -{f,s} {west,south,north,east}
-    """
+  bspwmrc_content="#!/bin/bash
+sxhkd &
+polybar bspwm &
+picom -b &
+exec bspwm
+"
 
-    # Write config files
-    write_config_file("~/.config/bspwm/bspwmrc", bspwmrc_content)
-    write_config_file("~/.config/sxhkd/sxhkdrc", sxhkdrc_content)
+  sxhkdrc_content="super + Return
+  alacritty
+super + Shift + q
+  bspc window -c
+super + {h,j,k,l}
+  bspc node -{focus,shift} {west,south,north,east}
+super + {Left,Down,Up,Right}
+  bspc node -{focus,shift} {west,south,north,east}
+super + d
+  rofi -show drun
+"
 
-    # Backup .xinitrc
-    backup_file("~/.xinitrc")
+  rofi_config_content="rofi.theme: Arc-Dark
+"
 
-    # Update .xinitrc with startup commands
-    startup_commands = ["bspwm", "sxhkd", "dunst"]
-    update_xinitrc(startup_commands)
+  picom_config_content="backend = \"glx\";
+vsync = true;
+"
 
-    # Select bspwm as the default window manager
-    select_bspwm()
+  handle_file "$CONFIG_DIR/bspwm/bspwmrc" "$bspwmrc_content"
+  handle_file "$CONFIG_DIR/sxhkd/sxhkdrc" "$sxhkdrc_content"
+  handle_file "$CONFIG_DIR/rofi/config.rasi" "$rofi_config_content"
+  handle_file "$CONFIG_DIR/picom/picom.conf" "$picom_config_content"
 
-    # Start X server with bspwm, sxhkd, and dunst
-    print_colored("Starting X server with bspwm, sxhkd, and dunst...", "1;34")
-    subprocess.run(["startx"])
+  xinitrc_path="$HOME/.xinitrc"
+  xinitrc_content="#!/bin/sh
+exec bspwm
+"
 
-# Execute the main function
-if __name__ == "__main__":
-    main()
+  if [[ -f "$xinitrc_path" ]]; then
+    create_backup "$xinitrc_path"
+    echo "$xinitrc_content" > "$xinitrc_path"
+    chmod 755 "$xinitrc_path"
+    print_color "$xinitrc_path overwritten." "1;32"
+  else
+    echo "$xinitrc_content" > "$xinitrc_path"
+    chmod 755 "$xinitrc_path"
+    print_color "$xinitrc_path created." "1;32"
+  fi
 
-# Print upgraded program
-with open(__file__, "r") as f:
-    upgraded_program = f.read()
-print("\nUpgraded Program:\n")
-print(upgraded_program)
+  # Start bspwm
+  startx
+}
+
+main "$@"
