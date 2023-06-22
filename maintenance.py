@@ -11,6 +11,27 @@ if os.geteuid() != 0:
     print(colored("You need to have root privileges to run this script.", "red"))
     exit(1)
 
+BACKUP_DIR = os.path.expanduser("~/arch_maintenance_backup")
+
+# Function to create backup of a file or directory
+def create_backup(path):
+    backup_name = get_backup_name(path)
+    backup_path = os.path.join(BACKUP_DIR, backup_name)
+    try:
+        shutil.copy2(path, backup_path)
+        print(colored(f"Created backup: {backup_name}", "green"))
+        return backup_path
+    except shutil.Error as e:
+        print(colored(f"Failed to create backup: {e}", "red"))
+        return None
+
+# Function to generate unique backup name based on timestamp
+def get_backup_name(path):
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = os.path.basename(path)
+    backup_name = f"{filename}.{timestamp}.bak"
+    return backup_name
+
 # Check for outdated packages
 outdated_packages = subprocess.run(["pacman", "-Qu"], capture_output=True, text=True)
 if outdated_packages.returncode == 0:
@@ -77,54 +98,56 @@ if input("Perform system optimization? (y/n): ").lower() == "y":
         print(colored("Recommended environment variables:", "yellow"))
         print(colored("export PATH=$PATH:/usr/local/bin", "cyan"))
         print(colored("export PATH=$PATH:/usr/local/bin", "cyan"))
-    
 
-    # Set environment variables
-    if input("Set recommended environment variables? (y/n): ").lower() == "y":
-        with open(os.path.expanduser("~/.bashrc"), "a") as f:
-            f.write("export PATH=$PATH:/usr/local/bin\n")
-            f.write("export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib\n")
+        # Set environment variables
+        if input("Set recommended environment variables? (y/n): ").lower() == "y":
+            bashrc_path = os.path.expanduser("~/.bashrc")
+            backup_file = create_backup(bashrc_path)
+            if backup_file:
+                with open(bashrc_path, "a") as f:
+                    f.write("export PATH=$PATH:/usr/local/bin\n")
+                    f.write("export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib\n")
 
-    # Update mirrorlist
-    if input("Update mirrorlist? (y/n): ").lower() == "y":
-        mirrorlist_folder = "/etc/pacman.d/mirrorlist"
-        if not os.path.exists(mirrorlist_folder):
-            os.makedirs(mirrorlist_folder)
+        # Update mirrorlist
+        if input("Update mirrorlist? (y/n): ").lower() == "y":
+            mirrorlist_folder = "/etc/pacman.d/mirrorlist"
+            if not os.path.exists(mirrorlist_folder):
+                os.makedirs(mirrorlist_folder)
 
-        # Ask user to select one or more countries for repository host origin of mirrors
-        country_input = input("Enter country code(s) for repository host origin of mirrors (e.g. FR,GB): ")
-        if country_input == "":
-            country_input = "FI"  # default to Finland if no input provided
-        countries = country_input.upper().split(",")
-        print(colored(f"Selected country codes: {countries}", "yellow"))
+            # Ask user to select one or more countries for repository host origin of mirrors
+            country_input = input("Enter country code(s) for repository host origin of mirrors (e.g. FR,GB): ")
+            if country_input == "":
+                country_input = "FI"  # default to Finland if no input provided
+            countries = country_input.upper().split(",")
+            print(colored(f"Selected country codes: {countries}", "yellow"))
 
-        # Fetch mirrorlist from internet and pretty print available mirrors
-        response = subprocess.run(["curl", "-s", f"https://archlinux.org/mirrorlist/?country={','.join(countries)}&protocol=https&use_mirror_status=on"],
-                                stdout=subprocess.PIPE)
-        mirrors = response.stdout.decode().split("\n")
-        for mirror in mirrors:
-            if mirror.startswith("Server = "):
-                print(mirror)
+            # Fetch mirrorlist from internet and pretty print available mirrors
+            response = subprocess.run(["curl", "-s", f"https://archlinux.org/mirrorlist/?country={','.join(countries)}&protocol=https&use_mirror_status=on"],
+                                    stdout=subprocess.PIPE)
+            mirrors = response.stdout.decode().split("\n")
+            for mirror in mirrors:
+                if mirror.startswith("Server = "):
+                    print(mirror)
 
-        # Uncomment Finland mirrors
-        with open("/etc/pacman.d/mirrorlist.pacnew") as mirrors:
-            finland_mirrors = []
-            for line in mirrors:
-                if line.startswith("#Server = http://mirror1.fin.mirror.archlinux.org/"):
-                    line = line.replace("#", "")
-                    finland_mirrors.append(line.strip())
-                elif line.startswith("Server = http://mirror1.fin.mirror.archlinux.org/"):
-                    finland_mirrors.append(line.strip())
-        print(colored(f"Finland mirrors: {finland_mirrors}", "yellow"))
+            # Uncomment Finland mirrors
+            with open("/etc/pacman.d/mirrorlist.pacnew") as mirrors:
+                finland_mirrors = []
+                for line in mirrors:
+                    if line.startswith("#Server = http://mirror1.fin.mirror.archlinux.org/"):
+                        line = line.replace("#", "")
+                        finland_mirrors.append(line.strip())
+                    elif line.startswith("Server = http://mirror1.fin.mirror.archlinux.org/"):
+                        finland_mirrors.append(line.strip())
+            print(colored(f"Finland mirrors: {finland_mirrors}", "yellow"))
 
-        # Write selected mirrors to mirrorlist.new
-        with open(f"{mirrorlist_folder}/mirrorlist.new", "w") as f:
-            f.write("# Updated on " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
-            for mirror in finland_mirrors:
-                response = os.system("ping -c 1 " + mirror.split("=")[1].strip())
-                if response == 0:
-                    f.write(f"{mirror}\n")
-                    break
-            else:
-                print(colored(f"Unable to find a working Finland mirror to update mirrorlist", "red"))
-                exit(1)
+            # Write selected mirrors to mirrorlist.new
+            with open(f"{mirrorlist_folder}/mirrorlist.new", "w") as f:
+                f.write("# Updated on " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+                for mirror in finland_mirrors:
+                    response = os.system("ping -c 1 " + mirror.split("=")[1].strip())
+                    if response == 0:
+                        f.write(f"{mirror}\n")
+                        break
+                else:
+                    print(colored(f"Unable to find a working Finland mirror to update mirrorlist", "red"))
+                    exit(1)
