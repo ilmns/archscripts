@@ -20,7 +20,7 @@ def run_command(command, dry_run=False):
 
 def install_package(package_name, dry_run=False):
     logging.info(f"Installing {package_name}...")
-    run_command(f"sudo pacman -S {package_name}", dry_run)
+    run_command(f"sudo pacman -S --needed {package_name}", dry_run)
     logging.info(f"{package_name} installation completed.")
 
 
@@ -145,7 +145,7 @@ def perform_post_installation_steps(dry_run=False):
 
 def update_system():
     logging.info("Updating the system...")
-    run_command("sudo pacman -Syu")
+    run_command("sudo pacman -Syu", dry_run=False)
     logging.info("System update completed.")
 
 
