@@ -123,8 +123,9 @@ set_wallpaper() {
     download "$url" "$path"
     feh --bg-scale "$path"
   else
-    echo "Error: No wallpaper specified."
-    return
+    # No wallpaper specified, set a default wallpaper here
+    local default_wallpaper="/path/to/default/wallpaper.jpg"
+    feh --bg-scale "$default_wallpaper"
   fi
 }
 
@@ -178,9 +179,32 @@ choose() {
   done
 }
 
-configure_bspwm() {
-  local default_shell="$1"
+main() {
+  parse_args "$@"
 
+  make_dir "$BACKUP_DIR"
+
+  dep_check "xorg-server"
+  dep_check "bspwm"
+  dep_check "sxhkd"
+  dep_check "polybar"
+  dep_check "picom"
+  dep_check "feh"
+  dep_check "rofi"
+  dep_check "alacritty"
+  dep_check "dmenu"
+  dep_check "nitrogen"
+  dep_check "compton"
+
+  set_wallpaper "$path" "$url" "$random"
+
+  make_dir "$CONFIG_DIR/bspwm"
+  make_dir "$CONFIG_DIR/sxhkd"
+  make_dir "$CONFIG_DIR/rofi"
+  make_dir "$CONFIG_DIR/picom"
+
+  shell_options=("bash" "zsh" "fish")
+  default_shell=$(choose "${shell_options[@]}" "Select default shell:")
   case $default_shell in
     "bash")
       handle_file "$HOME/.bashrc" "exec bspwm"
@@ -189,7 +213,6 @@ configure_bspwm() {
       handle_file "$HOME/.zshrc" "exec bspwm"
       ;;
     "fish")
-      make_dir "$CONFIG_DIR/fish"
       handle_file "$CONFIG_DIR/fish/config.fish" "exec bspwm"
       ;;
   esac
@@ -220,11 +243,6 @@ super + d
 vsync = true;
 "
 
-  make_dir "$CONFIG_DIR/bspwm"
-  make_dir "$CONFIG_DIR/sxhkd"
-  make_dir "$CONFIG_DIR/rofi"
-  make_dir "$CONFIG_DIR/picom"
-
   handle_file "$CONFIG_DIR/bspwm/bspwmrc" "$bspwmrc_content"
   handle_file "$CONFIG_DIR/sxhkd/sxhkdrc" "$sxhkdrc_content"
   handle_file "$CONFIG_DIR/rofi/config.rasi" "$rofi_config_content"
@@ -245,34 +263,9 @@ exec bspwm
     chmod +x "$xinitrc_path"
     print_color "$xinitrc_path created." "1;32"
   fi
-}
-
-main() {
-  parse_args "$@"
-
-  make_dir "$BACKUP_DIR"
-
-  dep_check "xorg-server"
-  dep_check "bspwm"
-  dep_check "sxhkd"
-  dep_check "polybar"
-  dep_check "picom"
-  dep_check "feh"
-  dep_check "rofi"
-  dep_check "alacritty"
-  dep_check "dmenu"
-  dep_check "nitrogen"
-  dep_check "compton"
-
-  set_wallpaper "$path" "$url" "$random"
-
-  shell_options=("bash" "zsh" "fish")
-  default_shell=$(choose "${shell_options[@]}" "Select default shell:")
-
-  configure_bspwm "$default_shell"
 
   # Start bspwm
-  exec_command startx
+  startx
 }
 
 main "$@"
