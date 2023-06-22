@@ -13,8 +13,11 @@ def run_command(command, dry_run=False):
         try:
             subprocess.run(command, shell=True, check=True)
         except subprocess.CalledProcessError as e:
-            logging.error(f"Error executing command: {command}")
-            logging.error(e.output.decode())
+            error_msg = f"Error executing command: {command}"
+            if e.output is not None and isinstance(e.output, bytes):
+                error_msg += f"\n{e.output.decode()}"
+            logging.error(error_msg)
+            print(error_msg)
             raise
 
 
