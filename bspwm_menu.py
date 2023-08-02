@@ -8,11 +8,15 @@ config_dir = home_dir / ".config"
 bspwm_dir = config_dir / "bspwm"
 sxhkd_dir = config_dir / "sxhkd"
 polybar_dir = config_dir / "polybar"
+picom_dir = config_dir / "picom"
+dunst_dir = config_dir / "dunst"
 accountservice_dir = Path("/var/lib/AccountsService/users")
 
 bspwm_config_file = bspwm_dir / "bspwmrc"
 sxhkd_config_file = sxhkd_dir / "sxhkdrc"
 polybar_config_file = polybar_dir / "config"
+picom_config_file = picom_dir / "picom.conf"
+dunst_config_file = dunst_dir / "dunstrc"
 bspwm_autostart_file = home_dir / ".xinitrc"
 bspwm_desktop_file = config_dir / "autostart" / "bspwm.desktop"
 accountservice_file = accountservice_dir / os.getlogin()  # get current username
@@ -21,7 +25,8 @@ accountservice_file = accountservice_dir / os.getlogin()  # get current username
 bspwm_dir.mkdir(parents=True, exist_ok=True)
 sxhkd_dir.mkdir(parents=True, exist_ok=True)
 polybar_dir.mkdir(parents=True, exist_ok=True)
-accountservice_dir.mkdir(parents=True, exist_ok=True)
+picom_dir.mkdir(parents=True, exist_ok=True)
+dunst_dir.mkdir(parents=True, exist_ok=True)
 
 
 def ask_sudo_password():
@@ -38,7 +43,7 @@ def run_command(command):
 
 
 def install_packages(sudo_password):
-    packages = ["bspwm", "sxhkd", "polybar", "lightdm", "lightdm-gtk-greeter"]
+    packages = ["bspwm", "sxhkd", "polybar", "lightdm", "lightdm-gtk-greeter", "picom", "dunst"]
     command = f"echo {sudo_password} | sudo -S pacman -S --noconfirm {' '.join(packages)}"
     run_command(command)
 
@@ -83,6 +88,16 @@ def setup_config_files():
     ; Rest of the polybar config
     """
 
+    # Picom config content
+    picom_config = """
+    # Put your picom config here
+    """
+
+    # Dunst config content
+    dunst_config = """
+    # Put your dunst config here
+    """
+
     accountservice_config = """
     [User]
     Language=fi_FI.UTF-8
@@ -106,6 +121,18 @@ def setup_config_files():
             file.write(polybar_config)
     except Exception as e:
         print(f"Error writing polybar config: {e}")
+
+    try:
+        with open(picom_config_file, 'w') as file:
+            file.write(picom_config)
+    except Exception as e:
+        print(f"Error writing picom config: {e}")
+
+    try:
+        with open(dunst_config_file, 'w') as file:
+            file.write(dunst_config)
+    except Exception as e:
+        print(f"Error writing dunst config: {e}")
 
     try:
         with open(accountservice_file, 'w') as file:
