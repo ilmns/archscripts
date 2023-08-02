@@ -186,7 +186,7 @@ choose() {
     ((i++))
   done
   while true; do
-    read -rp "> " choice
+    read -rp "> " choice </dev/tty
     if ((choice >= 1 && choice <= ${#choices[@]})); then
       echo "${choices[choice - 1]}"
       break
@@ -195,6 +195,7 @@ choose() {
     fi
   done
 }
+
 
 setup_bspwm() {
   parse_args "$@"
