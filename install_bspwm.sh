@@ -65,14 +65,6 @@ package_installed() {
   fi
 }
 
-dep_check() {
-  local dep="$1"
-  if ! command -v "$dep" &>/dev/null; then
-    print_color "$dep is missing. Installing it..." "1;33"
-    install "$dep"
-  fi
-}
-
 install() {
   local pkg="$1"
   if package_installed "$pkg"; then
@@ -91,15 +83,6 @@ make_dir() {
   if [[ ! -d "$path" ]]; then
     mkdir -p "$path"
   fi
-}
-
-overwrite_prompt() {
-  local path="$1"
-  read -rp "$path already exists. Do you want to overwrite it? (yes/no): " response
-  case $response in
-    [Yy]|[Yy][Ee][Ss]) return 0 ;;
-    *) return 1 ;;
-  esac
 }
 
 set_wallpaper() {
@@ -135,17 +118,13 @@ handle_file() {
   local content="$2"
 
   if [[ -f "$path" ]]; then
-    if overwrite_prompt "$path"; then
-      create_backup "$path"
-      echo "$content" > "$path"
-      print_color "$path overwritten." "1;32"
-    else
-      print_color "$path not overwritten. Skipped." "1;33"
+    if ! create_backup "$path"; then
+      echo "Failed to create backup: $path"
+      return 1
     fi
-  else
-    echo "$content" > "$path"
-    print_color "$path created." "1;32"
   fi
+  echo "$content" > "$path"
+  print_color "$path written." "1;32"
 }
 
 create_backup() {
@@ -155,45 +134,11 @@ create_backup() {
   local backup_path="$BACKUP_DIR/$backup_name"
   if cp "$path" "$backup_path"; then
     print_color "Created backup: $backup_name" "1;32"
+    return 0
   else
     print_color "Failed to create backup: $backup_name" "1;33"
+    return 1
   fi
-}
-
-set_default_shell() {
-  local shell_options=("bash" "zsh" "fish")
-  local default_shell=$(choose "${shell_options[@]}" "Select default shell:")
-  case $default_shell in
-    "bash")
-      handle_file "$HOME/.bashrc" "exec bspwm"
-      ;;
-    "zsh")
-      handle_file "$HOME/.zshrc" "exec bspwm"
-      ;;
-    "fish")
-      handle_file "$CONFIG_DIR/fish/config.fish" "exec bspwm"
-      ;;
-  esac
-}
-
-choose() {
-  local choices=("$@")
-  local msg="$1"
-  local i=1
-  echo "$msg"
-  for choice in "${choices[@]}"; do
-    echo "$i. $choice"
-    ((i++))
-  done
-  while true; do
-    read -rp "> " choice
-    if ((choice >= 1 && choice <= ${#choices[@]})); then
-      echo "${choices[choice - 1]}"
-      break
-    else
-      echo "Invalid choice. Please enter a number between 1 and ${#choices[@]}."
-    fi
-  done
 }
 
 setup_bspwm() {
@@ -228,40 +173,14 @@ super + d
   rofi -show drun
 "
 
-  local rofi_config_content="rofi.theme: Arc-Dark
-"
-
-  local picom_config_content="backend = \"glx\";
-vsync = true;
-"
-
-  make_dir "$CONFIG_DIR/bspwm"
-  make_dir "$CONFIG_DIR/sxhkd"
-  make_dir "$CONFIG_DIR/rofi"
-  make_dir "$CONFIG_DIR/picom"
+  local xinitrc_content="exec bspwm"
 
   handle_file "$CONFIG_DIR/bspwm/bspwmrc" "$bspwmrc_content"
   handle_file "$CONFIG_DIR/sxhkd/sxhkdrc" "$sxhkdrc_content"
-  handle_file "$CONFIG_DIR/rofi/config.rasi" "$rofi_config_content"
-  handle_file "$CONFIG_DIR/picom/picom.conf" "$picom_config_content"
+  handle_file "$XINITRC_PATH" "$xinitrc_content"
 
-  handle_file "$XINITRC_PATH" "#!/bin/sh\nexec bspwm"
-
-  # Set default shell startup file
-  set_default_shell
-
-  # Check if the default shell startup file is set
-  if [[ ! -f "$XINITRC_PATH" ]]; then
-    echo "Error: Default shell startup file ($XINITRC_PATH) is missing."
-    exit 1
-  fi
-
-  # Start bspwm
-  exec startx
+  chmod +x "$CONFIG_DIR/bspwm/bspwmrc"
+  print_color "bspwm setup completed. Restart your session for changes to take effect." "1;32"
 }
 
-main() {
-  setup_bspwm "$@"
-}
-
-main "$@"
+setup_bspwm "$@"
