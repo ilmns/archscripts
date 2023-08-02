@@ -3,8 +3,7 @@
 CONFIG_DIR="$HOME/.config"
 BACKUP_DIR="$HOME/.config_backup"
 WALLPAPER_DIR="/usr/share/backgrounds"
-DEFAULT_WALLPAPER_URL="https://wallpapercave.com/wp/wp1351922.png"
-DEFAULT_WALLPAPER_PATH="$WALLPAPER_DIR/default_wallpaper.png"
+XINITRC_PATH="$HOME/.xinitrc"
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
@@ -115,19 +114,19 @@ set_wallpaper() {
     done < <(find "$WALLPAPER_DIR" -type f \( -iname "*.jpg" -o -iname "*.png" \) -print0)
 
     if [[ ${#img_paths[@]} -eq 0 ]]; then
-      echo "No wallpaper files found in $WALLPAPER_DIR. Downloading default wallpaper..."
-      download "$DEFAULT_WALLPAPER_URL" "$DEFAULT_WALLPAPER_PATH"
-      feh --bg-scale "$DEFAULT_WALLPAPER_PATH"
-    else
-      local random_img
-      random_img=${img_paths[RANDOM % ${#img_paths[@]}]}
-      feh --bg-scale "$random_img"
+      echo "Warning: No wallpaper files found in $WALLPAPER_DIR."
+      return
     fi
+
+    local random_img
+    random_img=${img_paths[RANDOM % ${#img_paths[@]}]}
+    feh --bg-scale "$random_img"
   elif [[ -n $url ]]; then
     download "$url" "$path"
     feh --bg-scale "$path"
   else
     echo "Error: No wallpaper specified."
+    return
   fi
 }
 
@@ -161,6 +160,22 @@ create_backup() {
   fi
 }
 
+set_default_shell() {
+  local shell_options=("bash" "zsh" "fish")
+  local default_shell=$(choose "${shell_options[@]}" "Select default shell:")
+  case $default_shell in
+    "bash")
+      handle_file "$HOME/.bashrc" "exec bspwm"
+      ;;
+    "zsh")
+      handle_file "$HOME/.zshrc" "exec bspwm"
+      ;;
+    "fish")
+      handle_file "$CONFIG_DIR/fish/config.fish" "exec bspwm"
+      ;;
+  esac
+}
+
 choose() {
   local choices=("$@")
   local msg="$1"
@@ -181,52 +196,27 @@ choose() {
   done
 }
 
-main() {
+setup_bspwm() {
   parse_args "$@"
 
   make_dir "$BACKUP_DIR"
 
-  dep_check "xorg-server"
-  dep_check "bspwm"
-  dep_check "sxhkd"
-  dep_check "polybar"
-  dep_check "picom"
-  dep_check "feh"
-  dep_check "rofi"
-  dep_check "alacritty"
-  dep_check "dmenu"
-  dep_check "nitrogen"
-  dep_check "compton"
+  local required_packages=("xorg-server" "bspwm" "sxhkd" "polybar" "picom" "feh" "rofi" "alacritty" "dmenu" "nitrogen")
 
-  make_dir "$CONFIG_DIR/bspwm"
-  make_dir "$CONFIG_DIR/sxhkd"
-  make_dir "$CONFIG_DIR/rofi"
-  make_dir "$CONFIG_DIR/picom"
+  for package in "${required_packages[@]}"; do
+    install "$package"
+  done
 
   set_wallpaper "$path" "$url" "$random"
 
-  shell_options=("bash" "zsh" "fish")
-  default_shell=$(choose "${shell_options[@]}" "Select default shell:")
-  case $default_shell in
-    "bash")
-      handle_file "$HOME/.bashrc" "exec bspwm"
-      ;;
-    "zsh")
-      handle_file "$HOME/.zshrc" "exec bspwm"
-      ;;
-    "fish")
-      handle_file "$CONFIG_DIR/fish/config.fish" "exec bspwm"
-      ;;
-  esac
-
-  bspwmrc_content="#!/bin/bash
+  local bspwmrc_content="#!/bin/bash
 sxhkd &
 polybar bspwm &
 picom -b &
 exec bspwm
 "
 
-  sxhkdrc_content="super + Return
+  local sxhkdrc_content="super + Return
   alacritty
 super + Shift + q
   bspc window -c
@@ -238,36 +228,40 @@ super + d
   rofi -show drun
 "
 
-  rofi_config_content="rofi.theme: Arc-Dark
+  local rofi_config_content="rofi.theme: Arc-Dark
 "
 
-  picom_config_content="backend = \"glx\";
+  local picom_config_content="backend = \"glx\";
 vsync = true;
 "
+
+  make_dir "$CONFIG_DIR/bspwm"
+  make_dir "$CONFIG_DIR/sxhkd"
+  make_dir "$CONFIG_DIR/rofi"
+  make_dir "$CONFIG_DIR/picom"
 
   handle_file "$CONFIG_DIR/bspwm/bspwmrc" "$bspwmrc_content"
   handle_file "$CONFIG_DIR/sxhkd/sxhkdrc" "$sxhkdrc_content"
   handle_file "$CONFIG_DIR/rofi/config.rasi" "$rofi_config_content"
   handle_file "$CONFIG_DIR/picom/picom.conf" "$picom_config_content"
 
-  xinitrc_path="$HOME/.xinitrc"
-  xinitrc_content="#!/bin/sh
-exec bspwm
-"
+  handle_file "$XINITRC_PATH" "#!/bin/sh\nexec bspwm"
 
-  if [[ -f "$xinitrc_path" ]]; then
-    create_backup "$xinitrc_path"
-    echo "$xinitrc_content" > "$xinitrc_path"
-    chmod +x "$xinitrc_path"
-    print_color "$xinitrc_path overwritten." "1;32"
-  else
-    echo "$xinitrc_content" > "$xinitrc_path"
-    chmod +x "$xinitrc_path"
-    print_color "$xinitrc_path created." "1;32"
+  # Set default shell startup file
+  set_default_shell
+
+  # Check if the default shell startup file is set
+  if [[ ! -f "$XINITRC_PATH" ]]; then
+    echo "Error: Default shell startup file ($XINITRC_PATH) is missing."
+    exit 1
   fi
 
   # Start bspwm
-  startx
+  exec startx
+}
+
+main() {
+  setup_bspwm "$@"
 }
 
 main "$@"
