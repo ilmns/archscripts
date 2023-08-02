@@ -69,6 +69,23 @@ super + Return
 EOL
 }
 
+# Write sxhkd config
+setup_sxhkd() {
+    cat > "$sxhkd_dir/sxhkdrc" <<EOL
+# Launch Thunar (File Manager)
+super + t
+    thunar
+
+# Launch Chromium
+super + p
+    chromium
+
+# Launch Terminator (Terminal Emulator)
+super + Return
+    terminator
+EOL
+}
+
 # Write polybar config
 setup_polybar() {
     cat > "$polybar_dir/config" <<EOL
@@ -96,6 +113,7 @@ setup_rofi() {
 # Rofi config content here
 EOL
 }
+
 
 # Enable bspwm at start
 enable_bspwm_at_start() {
