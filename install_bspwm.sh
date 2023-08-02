@@ -1,68 +1,54 @@
-#!/bin/bash
+#!/usr/bin/env python3
 
-CONFIG_DIR="$HOME/.config"
-BACKUP_DIR="$HOME/.config_backup"
-WALLPAPER_DIR="/usr/share/backgrounds"
-XINITRC_PATH="$HOME/.xinitrc"
+import os
+import subprocess
 
-install_required_packages() {
-  local required_packages=("xorg-server" "bspwm" "sxhkd" "polybar" "picom" "feh" "rofi" "alacritty" "dmenu" "nitrogen" "lightdm")
+def run(command):
+    subprocess.call(command, shell=True)
 
-  for package in "${required_packages[@]}"; do
-    sudo pacman -S --noconfirm --needed "$package"
-  done
-}
+# Install packages
+packages = [
+    "bspwm",
+    "rofi",
+    "lightdm",
+    "lightdm-gtk-greeter",
+    "picom",
+    "nitrogen",
+]
 
-create_config_dir() {
-  local dirs=("$CONFIG_DIR/bspwm" "$CONFIG_DIR/sxhkd" "$CONFIG_DIR/rofi" "$CONFIG_DIR/picom" "$CONFIG_DIR/nitrogen")
-  for dir in "${dirs[@]}"; do
-    mkdir -p "$dir"
-  done
-}
+for package in packages:
+    run(f"sudo pacman -Syu --noconfirm --needed {package}")
 
-copy_example_configs() {
-  cp /usr/share/doc/bspwm/examples/bspwmrc $CONFIG_DIR/bspwm/bspwmrc
-  cp /usr/share/doc/bspwm/examples/sxhkdrc $CONFIG_DIR/sxhkd/sxhkdrc
-}
+# Create required directories
+directories = [
+    "/home/$USER/.config/bspwm",
+    "/home/$USER/.config/sxhkd",
+    "/home/$USER/.config/picom",
+    "/home/$USER/.config/nitrogen",
+]
 
-configure_picom() {
-  echo -e "backend = \"glx\";\nvsync = true;" > "$CONFIG_DIR/picom/picom.conf"
-}
+for directory in directories:
+    run(f"mkdir -p {directory}")
 
-configure_rofi() {
-  echo -e "rofi.theme: Arc-Dark" > "$CONFIG_DIR/rofi/config.rasi"
-}
+# Configure bspwm
+run('echo "#!/bin/sh" > /home/$USER/.config/bspwm/bspwmrc')
+run('echo "sxhkd &" >> /home/$USER/.config/bspwm/bspwmrc')
+run('echo "picom &" >> /home/$USER/.config/bspwm/bspwmrc')
+run('echo "nitrogen --restore &" >> /home/$USER/.config/bspwm/bspwmrc')
+run('echo "exec bspwm" >> /home/$USER/.config/bspwm/bspwmrc')
+run('chmod +x /home/$USER/.config/bspwm/bspwmrc')
 
-configure_lightdm() {
-  sudo sed -i 's/^#greeter-session=.*/greeter-session=lightdm-gtk-greeter/' /etc/lightdm/lightdm.conf
-}
+# Configure sxhkd
+run('touch /home/$USER/.config/sxhkd/sxhkdrc')
 
-configure_nitrogen() {
-  echo -e "[xin_-1]\nfile=/usr/share/backgrounds/default.jpg\nmode=5\nbgcolor=#000000" > "$CONFIG_DIR/nitrogen/bg-saved.cfg"
-  nitrogen --restore
-}
+# Configure LightDM
+run("sudo sed -i 's/^#greeter-session=.*/greeter-session=lightdm-gtk-greeter/' /etc/lightdm/lightdm.conf")
+run("echo '[Seat:*]\nsession-wrapper=/etc/lightdm/Xsession' | sudo tee -a /etc/lightdm/lightdm.conf")
+run("sudo bash -c 'echo -e \"#!/bin/bash\\nexec bspwm\" > /etc/lightdm/Xsession'")
+run("sudo chmod +x /etc/lightdm/Xsession")
 
-set_permissions() {
-  chmod +x "$CONFIG_DIR/bspwm/bspwmrc"
-  chmod +x "$CONFIG_DIR/sxhkd/sxhkdrc"
-}
+# Enable LightDM
+run("sudo systemctl enable lightdm")
 
-configure_xinit() {
-  echo "exec bspwm" > "$XINITRC_PATH"
-}
-
-main() {
-  install_required_packages
-  create_config_dir
-  copy_example_configs
-  configure_picom
-  configure_rofi
-  configure_lightdm
-  configure_nitrogen
-  set_permissions
-  configure_xinit
-  sudo systemctl enable lightdm
-  echo "Reboot your system to start using BSPWM."
-}
-
-main "$@"
+# Print message
+print("Configuration is done. Please reboot your machine.")
