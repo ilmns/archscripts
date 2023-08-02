@@ -196,7 +196,6 @@ choose() {
   done
 }
 
-
 setup_bspwm() {
   parse_args "$@"
 
@@ -258,7 +257,8 @@ vsync = true;
   fi
 
   # Start bspwm
-  exec startx
+  startx
+  exit 0
 }
 
 main() {
