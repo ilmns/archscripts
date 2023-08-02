@@ -8,7 +8,6 @@ config_dir = home_dir / ".config"
 bspwm_dir = config_dir / "bspwm"
 sxhkd_dir = config_dir / "sxhkd"
 polybar_dir = config_dir / "polybar"
-lightdm_config_dir = config_dir / "lightdm"
 accountservice_dir = Path("/var/lib/AccountsService/users")
 
 bspwm_config_file = bspwm_dir / "bspwmrc"
@@ -16,14 +15,12 @@ sxhkd_config_file = sxhkd_dir / "sxhkdrc"
 polybar_config_file = polybar_dir / "config"
 bspwm_autostart_file = home_dir / ".xinitrc"
 bspwm_desktop_file = config_dir / "autostart" / "bspwm.desktop"
-lightdm_gtk_greeter_config_file = lightdm_config_dir / "lightdm-gtk-greeter.conf"
 accountservice_file = accountservice_dir / os.getlogin()  # get current username
 
 # Create config directories
 bspwm_dir.mkdir(parents=True, exist_ok=True)
 sxhkd_dir.mkdir(parents=True, exist_ok=True)
 polybar_dir.mkdir(parents=True, exist_ok=True)
-lightdm_config_dir.mkdir(parents=True, exist_ok=True)
 accountservice_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -86,15 +83,6 @@ def setup_config_files():
     ; Rest of the polybar config
     """
 
-    lightdm_gtk_greeter_config = """
-    [greeter]
-    theme-name = Tela
-    icon-theme-name = Tela
-    cursor-theme-name = Tela
-    cursor-theme-size = 32
-    font-name = Cantarell 20
-    """
-
     accountservice_config = """
     [User]
     Language=fi_FI.UTF-8
@@ -118,12 +106,6 @@ def setup_config_files():
             file.write(polybar_config)
     except Exception as e:
         print(f"Error writing polybar config: {e}")
-
-    try:
-        with open(lightdm_gtk_greeter_config_file, 'w') as file:
-            file.write(lightdm_gtk_greeter_config)
-    except Exception as e:
-        print(f"Error writing lightdm-gtk-greeter config: {e}")
 
     try:
         with open(accountservice_file, 'w') as file:
