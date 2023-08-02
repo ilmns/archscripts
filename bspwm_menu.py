@@ -17,7 +17,7 @@ polybar_config_file = polybar_dir / "config"
 bspwm_autostart_file = home_dir / ".xinitrc"
 bspwm_desktop_file = config_dir / "autostart" / "bspwm.desktop"
 lightdm_gtk_greeter_config_file = lightdm_config_dir / "lightdm-gtk-greeter.conf"
-accountservice_file = accountservice_dir / os.getlogin() # get current username
+accountservice_file = accountservice_dir / os.getlogin()  # get current username
 
 # Create config directories
 bspwm_dir.mkdir(parents=True, exist_ok=True)
@@ -26,24 +26,62 @@ polybar_dir.mkdir(parents=True, exist_ok=True)
 lightdm_config_dir.mkdir(parents=True, exist_ok=True)
 accountservice_dir.mkdir(parents=True, exist_ok=True)
 
-def install():
-    subprocess.run(['sudo', 'pacman', '-S', '--noconfirm', 'bspwm'], check=True)
-    subprocess.run(['sudo', 'pacman', '-S', '--noconfirm', 'sxhkd'], check=True)
-    subprocess.run(['sudo', 'pacman', '-S', '--noconfirm', 'polybar'], check=True)
-    subprocess.run(['sudo', 'pacman', '-S', '--noconfirm', 'lightdm'], check=True)
-    subprocess.run(['sudo', 'pacman', '-S', '--noconfirm', 'lightdm-gtk-greeter'], check=True)
+
+def ask_sudo_password():
+    sudo_password = input("Please enter your sudo password: ")
+    return sudo_password
+
+
+def install_packages(sudo_password):
+    try:
+        packages = ["bspwm", "sxhkd", "polybar", "lightdm", "lightdm-gtk-greeter"]
+        subprocess.run(['echo', sudo_password, '|', 'sudo', '-S', 'pacman', '-S', '--noconfirm'] + packages, check=True)
+    except subprocess.CalledProcessError as e:
+        print("An error occurred during package installation:")
+        print(e)
+        exit(1)
+
 
 def setup_config_files():
     # Sample config file contents, replace with your actual contents
     bspwm_config = """
-    # BSPWM config content
+    #!/bin/bash
+
+    # Create panels on each monitor
+    for m in $(bspc query -M --names); do
+        bspc monitor "$m" -d 1 2 3 4 5 || {
+            echo "Failed to create panels on monitor $m"
+            exit 1
+        }
+    done
+
+    # Continue the rest of the bspwm config contents
     """
     sxhkd_config = """
-    # SXHKD config content
+    # Launch Thunar (File Manager)
+    super + t
+        thunar
+
+    # Launch Chromium
+    super + p
+        chromium
+
+    # Launch Terminator (Terminal Emulator)
+    super + Return
+        terminator
     """
-    polybar_config = """
     # Polybar config content
+    polybar_config = """
+    [colors]
+    background = #1a1b26
+    foreground = #a9b1d6
+    primary = #7aa2f7
+    secondary = #9ece6a
+    alert = #f7768e
+
+    ; Rest of the polybar config
     """
+
     lightdm_gtk_greeter_config = """
     [greeter]
     theme-name = Tela
@@ -52,6 +90,7 @@ def setup_config_files():
     cursor-theme-size = 32
     font-name = Cantarell 20
     """
+
     accountservice_config = """
     [User]
     Language=fi_FI.UTF-8
@@ -73,12 +112,11 @@ def setup_config_files():
     with open(accountservice_file, 'w') as file:
         file.write(accountservice_config)
 
+
 def enable_at_start():
-    # Add the execution command of bspwm to the .xinitrc file
     with open(bspwm_autostart_file, 'a') as file:
         file.write("\nexec bspwm\n")
 
-    # Create a .desktop file for bspwm
     desktop_file_content = """
     [Desktop Entry]
     Type=Application
@@ -86,9 +124,9 @@ def enable_at_start():
     Hidden=false
     NoDisplay=false
     X-GNOME-Autostart-enabled=true
-    Name[en_US]=bspwm
+    Name[fi_FI]=bspwm
     Name=bspwm
-    Comment[en_US]=
+    Comment[fi_FI]=
     Comment=
     """
     bspwm_desktop_file.parent.mkdir(parents=True, exist_ok=True)
@@ -96,10 +134,15 @@ def enable_at_start():
     with open(bspwm_desktop_file, 'w') as file:
         file.write(desktop_file_content)
 
-    # Enable LightDM
     subprocess.run(['sudo', 'systemctl', 'enable', 'lightdm.service'], check=True)
 
-# Call the function to install the software and set up the config files
-install()
-setup_config_files()
-enable_at_start()
+
+def main():
+    sudo_password = ask_sudo_password()
+    install_packages(sudo_password)
+    setup_config_files()
+    enable_at_start()
+
+
+if __name__ == "__main__":
+    main()
