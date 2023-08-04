@@ -23,10 +23,6 @@ rofi_dir="$config_dir/rofi"
 lightdm_config_dir="/etc/lightdm"
 accountservice_dir="/var/lib/AccountsService/users"
 
-if [[ ! -d "$config_dir" ]]; then
-    mkdir "$config_dir"
-fi
-
 # Function to check if a directory exists or create it
 check_or_create_directory() {
     local dir="$1"
@@ -35,6 +31,7 @@ check_or_create_directory() {
     fi
 }
 
+check_or_create_directory "$config_dir"
 check_or_create_directory "$bspwm_dir"
 check_or_create_directory "$sxhkd_dir"
 check_or_create_directory "$polybar_dir"
@@ -44,12 +41,16 @@ check_or_create_directory "$rofi_dir"
 check_or_create_directory "$lightdm_config_dir"
 check_or_create_directory "$accountservice_dir"
 
-
-
 # Define function to ask for sudo password
 ask_sudo_password() {
     read -s -p "Please enter your sudo password: " sudo_password
     echo "$sudo_password"
+}
+
+# Install required packages
+install_packages() {
+    local packages=("bspwm" "sxhkd" "polybar" "dunst" "picom" "lightdm" "lightdm-gtk-greeter" "rofi" "thunar")
+    sudo pacman -S --noconfirm "${packages[@]}"
 }
 
 # Install required packages
@@ -272,7 +273,7 @@ super + f
 # Toggle Polybar visibility
 super + b
     /home/crusader/.config/polybar/toggle_polybar.sh
-
+EOL
 }
 
 # Write polybar config
@@ -403,6 +404,14 @@ EOL
 
 
 
+# Enable bspwm at start
+enable_bspwm_at_start() {
+    cat > "$HOME/.xinitrc" <<EOL
+#!/bin/bash
+exec bspwm
+EOL
+    chmod +x "$HOME/.xinitrc"
+}
 
 # Main function
 main() {
@@ -417,5 +426,4 @@ main() {
     enable_bspwm_at_start
 }
 
-main
 main
