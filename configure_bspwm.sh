@@ -183,7 +183,7 @@ super + t
 
 # Launch Firefox
 super + p
-    firefox-nightly
+    chromium
 
 # Launch Terminator (Terminal Emulator)
 super + Return
@@ -366,10 +366,24 @@ EOL
 
 # Enable bspwm at start
 enable_bspwm_at_start() {
-    cat > "$home_dir/.xinitrc" <<EOL
+    cat > "$HOME/.xinitrc" <<EOL
 #!/bin/bash
 exec bspwm
 EOL
+    chmod +x "$HOME/.xinitrc"
+    sudo chown $USER:$USER "$HOME/.xinitrc"
+    sudo chmod 644 "$HOME/.xinitrc"
+}
+
+
+# Write polybar config
+setup_polybar() {
+    cat > "$polybar_dir/config" <<EOL
+# Polybar config content here
+EOL
+}
+
+
 
     cat > "$config_dir/autostart/bspwm.desktop" <<EOL
 [Desktop Entry]
@@ -386,6 +400,9 @@ EOL
 
     sudo systemctl enable lightdm.service
 }
+
+
+
 
 # Main function
 main() {
