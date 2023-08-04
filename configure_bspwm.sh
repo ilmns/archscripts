@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Function to check if running on Arch Linux-based system
 check_arch_linux() {
     if [[ ! -x /usr/bin/pacman ]]; then
@@ -18,7 +20,7 @@ check_home_directory() {
 check_or_create_directory() {
     local dir="$1"
     if [[ ! -d "$dir" ]]; then
-        mkdir "$dir"
+        mkdir -p "$dir"
     fi
 }
 
@@ -30,55 +32,73 @@ ask_sudo_password() {
 
 # Function to install required packages
 install_packages() {
-    local packages=("bspwm" "sxhkd" "polybar" "dunst" "picom" "lightdm" "lightdm-gtk-greeter" "rofi" "thunar")
-    sudo pacman -S --noconfirm "${packages[@]}"
+    local packages=("bspwm" "sxhkd" "polybar" "dunst" "picom" "rofi" "thunar")
+    sudo pacman -S --noconfirm "${packages[@]}" || {
+        echo "Failed to install required packages."
+        exit 1
+    }
 }
 
-# Check if necessary directories exist or create them
-config_dir="$HOME/.config"
-bspwm_dir="$config_dir/bspwm"
-sxhkd_dir="$config_dir/sxhkd"
-polybar_dir="$config_dir/polybar"
-dunst_dir="$config_dir/dunst"
-picom_dir="$config_dir/picom"
-rofi_dir="$config_dir/rofi"
-lightdm_config_dir="/etc/lightdm"
-accountservice_dir="/var/lib/AccountsService/users"
-
-# Function to check if a directory exists or create it
-check_or_create_directory() {
-    local dir="$1"
-    if [[ ! -d "$dir" ]]; then
-        mkdir "$dir"
-    fi
+# Function to enable bspwm and sxhkd at start
+enable_bspwm_and_sxhkd_at_start() {
+    cat > "$HOME/.xinitrc" <<EOL
+#!/bin/bash
+sxhkd &
+exec bspwm
+EOL
+    chmod +x "$HOME/.xinitrc"
 }
 
-check_or_create_directory "$config_dir"
-check_or_create_directory "$bspwm_dir"
-check_or_create_directory "$sxhkd_dir"
-check_or_create_directory "$polybar_dir"
-check_or_create_directory "$dunst_dir"
-check_or_create_directory "$picom_dir"
-check_or_create_directory "$rofi_dir"
-check_or_create_directory "$lightdm_config_dir"
-check_or_create_directory "$accountservice_dir"
+# Function to set up autostart for bspwm and sxhkd in lightdm
+setup_lightdm_autostart() {
+    local config_dir="$HOME/.config"
+    local autostart_dir="$config_dir/autostart"
+    check_or_create_directory "$autostart_dir"
 
-# Define function to ask for sudo password
-ask_sudo_password() {
-    read -s -p "Please enter your sudo password: " sudo_password
-    echo "$sudo_password"
+    cat > "$autostart_dir/bspwm.desktop" <<EOL
+[Desktop Entry]
+Type=Application
+Exec=bspwm
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[fi_FI]=bspwm
+Name=bspwm
+Comment[fi_FI]=
+Comment=
+EOL
+    cat > "$autostart_dir/sxhkd.desktop" <<EOL
+[Desktop Entry]
+Type=Application
+Exec=sxhkd
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[fi_FI]=sxhkd
+Name=sxhkd
+Comment[fi_FI]=
+Comment=
+EOL
+
+    sudo systemctl enable lightdm.service || {
+        echo "Failed to enable lightdm service."
+        exit 1
+    }
 }
 
-# Install required packages
-install_packages() {
-    local packages=("bspwm" "sxhkd" "polybar" "dunst" "picom" "lightdm" "lightdm-gtk-greeter" "rofi" "thunar")
-    sudo pacman -S --noconfirm "${packages[@]}"
-}
-
-
-# Write bspwm config
+# Function to write bspwm config
 setup_bspwm() {
+    local bspwm_dir="$HOME/.config/bspwm"
+    check_or_create_directory "$bspwm_dir"
+
     cat > "$bspwm_dir/bspwmrc" <<EOL
+#!/bin/bash
+
+#!/bin/bash
+
+# ----------------------------------------------------------------------------
+# SET MONITORS AND DESKTOPS
+# ----------------------------------------------------------------------------
 
 # Create panels on each monitor
 for m in $(bspc query -M --names); do
@@ -169,35 +189,28 @@ wmname LG3D
 # EXECUTE BSPWM
 # ----------------------------------------------------------------------------
 exec bspwm
+
+
 EOL
 }
-# Write sxhkd config
+
+# Function to write sxhkd config
 setup_sxhkd() {
+    local sxhkd_dir="$HOME/.config/sxhkd"
+    check_or_create_directory "$sxhkd_dir"
+
     cat > "$sxhkd_dir/sxhkdrc" <<EOL
+# ------------------------------------------------------------------------------
+# APPLICATION SHORTCUTS
+# ------------------------------------------------------------------------------
+
 # Launch Thunar (File Manager)
 super + t
     thunar
 
-# Launch Chromium
+# Launch Firefox
 super + p
-    chromium
-
-# Launch Terminator (Terminal Emulator)
-super + Return
-    terminator
-EOL
-}
-
-# Write sxhkd config
-setup_sxhkd() {
-    cat > "$sxhkd_dir/sxhkdrc" <<EOL
-# Launch Thunar (File Manager)
-super + t
-    thunar
-
-# Launch Chromium
-super + p
-    chromium
+    firefox-nightly
 
 # Launch Terminator (Terminal Emulator)
 super + Return
@@ -215,26 +228,106 @@ super + shift + d
 super + d
     rofi -show drun
 
-# The rest of the sxhkd config...
+
+
+# ------------------------------------------------------------------------------
+# BSPWM CONTROLS
+# ------------------------------------------------------------------------------
+
+# Restart bspwm
+super + Shift + r
+    bspc wm -r
+
+# Cycle through windows
+super + Tab
+    bspc node -f next.local
+
+# Swap windows
+super + shift + {h, j, k, l}
+    bspc node -s {west, south, north, east}
+
+# Window management
+super + {_, shift + }{1-9, 0}
+    bspc {desktop -f, node -d} '^{1-9, 10}'
+
+super + {_, shift + }{h, j, k, l}
+    bspc node -{f, s} {west, south, north, east}
+
+# Tilting windows
+super + y
+    bspc node -t monocle
+
+super + shift + y
+    bspc node -t tiled
+
+# Changing window size
+super + alt + {h, j, k, l}
+    bspc node -z {west -20 0, south 0 20, north 0 -20, east 20 0}
+
+# Resize floating windows
+super + ctrl + {h, j, k, l}
+    bspc node -z {left -20 0, bottom 0 20, top 0 -20, right +20 0}
+
+# Increase window size
+super + period
+    bspc node -z right +20 0 || bspc node -z bottom 0 -20
+
+# Decrease window size
+super + comma
+    bspc node -z right -20 0 || bspc node -z bottom 0 20
+
+# Move floating windows
+super + ctrl + {Up, Down, Left, Right}
+    bspc node -v {-20 0, 20 0, 0 -20, 0 20}
+
+# Toggle floating window
+super + shift + space
+    bspc node -t ~floating
+
+# Fibonacci tilting right
+super + ctrl + l
+    bspc node -R 90
+
+# Close current window
+super + q
+    bspc node -c
+
+# Fullscreen toggle
+super + f
+    bspc node -t fullscreen -T
+
+# Toggle Polybar visibility
+super + b
+    /home/crusader/.config/polybar/toggle_polybar.sh
+
 EOL
 }
 
-# Write polybar config
+# Function to write polybar config
 setup_polybar() {
+    local polybar_dir="$HOME/.config/polybar"
+    check_or_create_directory "$polybar_dir"
+
     cat > "$polybar_dir/config" <<EOL
-# Polybar config content here
+# ... (Polybar config content here) ...
 EOL
 }
 
-# Write dunst config
+# Function to write dunst config
 setup_dunst() {
+    local dunst_dir="$HOME/.config/dunst"
+    check_or_create_directory "$dunst_dir"
+
     cat > "$dunst_dir/dunstrc" <<EOL
-# Dunst config content here
+# ... (Dunst config content here) ...
 EOL
 }
 
-# Write picom config
+# Function to write picom config
 setup_picom() {
+    local picom_dir="$HOME/.config/picom"
+    check_or_create_directory "$picom_dir"
+
     cat > "$picom_dir/picom.conf" <<EOL
 # ------------------------------------------------------------------------------
 # SHADOW
@@ -300,61 +393,16 @@ detect-client-opacity = true;    # This prevents opacity being ignored for some 
 EOL
 }
 
-# Write rofi config
+# Function to write rofi config
 setup_rofi() {
-    cat > "$rofi_dir/config" <<EOL
-# Rofi config content here
+    local rofi_dir="$HOME/.config/rofi"
+    check_or_create_directory "$rofi_dir"
+
+    cat > "$rofi_dir/config.rasi" <<EOL
+@theme "/usr/share/rofi/themes/DarkBlue.rasi"
 EOL
 }
 
-
-# Enable bspwm at start
-enable_bspwm_at_start() {
-    cat > "$HOME/.xinitrc" <<EOL
-#!/bin/bash
-exec bspwm
-EOL
-    chmod +x "$HOME/.xinitrc"
-    sudo chown $USER:$USER "$HOME/.xinitrc"
-    sudo chmod 644 "$HOME/.xinitrc"
-}
-
-
-# Write polybar config
-setup_polybar() {
-    cat > "$polybar_dir/config" <<EOL
-# Polybar config content here
-EOL
-}
-
-
-
-    cat > "$config_dir/autostart/bspwm.desktop" <<EOL
-[Desktop Entry]
-Type=Application
-Exec=bspwm
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-Name[fi_FI]=bspwm
-Name=bspwm
-Comment[fi_FI]=
-Comment=
-EOL
-
-    sudo systemctl enable lightdm.service
-}
-
-
-
-# Enable bspwm at start
-enable_bspwm_at_start() {
-    cat > "$HOME/.xinitrc" <<EOL
-#!/bin/bash
-exec bspwm
-EOL
-    chmod +x "$HOME/.xinitrc"
-}
 
 
 # Main function
@@ -365,24 +413,25 @@ main() {
     # Check if the home directory is set
     check_home_directory
 
-    # Check if --dry-run option is given
-    if [[ "$1" == "--dry-run" ]]; then
-        dry_run
-        exit 0
-    fi
-
     # Ask for sudo password and install packages
     sudo_password=$(ask_sudo_password)
     install_packages
 
-    # Write configuration files and enable bspwm at start
+    # Check if --dry-run option is given
+    if [[ "$1" == "--dry-run" ]]; then
+        echo "Dry run: No changes will be made."
+        exit 0
+    fi
+
+    # Write configuration files
+    enable_bspwm_and_sxhkd_at_start
+    setup_lightdm_autostart
     setup_bspwm
     setup_sxhkd
     setup_polybar
     setup_dunst
     setup_picom
     setup_rofi
-    enable_bspwm_at_start
 }
 
 main "$@"
