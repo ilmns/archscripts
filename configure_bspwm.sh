@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Check if the script is being run on an Arch Linux-based system
-if [[ $(lsb_release -is) != "Arch" ]]; then
+# Check if running on Arch Linux-based system
+if [[ ! -x /usr/bin/pacman ]]; then
     echo "This script is intended for Arch Linux-based systems only."
     exit 1
 fi
@@ -43,6 +43,7 @@ check_or_create_directory "$picom_dir"
 check_or_create_directory "$rofi_dir"
 check_or_create_directory "$lightdm_config_dir"
 check_or_create_directory "$accountservice_dir"
+
 
 
 # Define function to ask for sudo password
@@ -399,4 +400,5 @@ main() {
     enable_bspwm_at_start
 }
 
+main
 main
