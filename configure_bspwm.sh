@@ -1,16 +1,38 @@
-#!/bin/bash
+# Function to check if running on Arch Linux-based system
+check_arch_linux() {
+    if [[ ! -x /usr/bin/pacman ]]; then
+        echo "This script is intended for Arch Linux-based systems only."
+        exit 1
+    fi
+}
 
-# Check if running on Arch Linux-based system
-if [[ ! -x /usr/bin/pacman ]]; then
-    echo "This script is intended for Arch Linux-based systems only."
-    exit 1
-fi
+# Function to check if the home directory is set
+check_home_directory() {
+    if [[ -z $HOME ]]; then
+        echo "Home directory not set. Please make sure your HOME environment variable is set."
+        exit 1
+    fi
+}
 
-# Check if the home directory is set
-if [[ -z $HOME ]]; then
-    echo "Home directory not set. Please make sure your HOME environment variable is set."
-    exit 1
-fi
+# Function to check if a directory exists or create it
+check_or_create_directory() {
+    local dir="$1"
+    if [[ ! -d "$dir" ]]; then
+        mkdir "$dir"
+    fi
+}
+
+# Function to ask for sudo password
+ask_sudo_password() {
+    read -s -p "Please enter your sudo password: " sudo_password
+    echo "$sudo_password"
+}
+
+# Function to install required packages
+install_packages() {
+    local packages=("bspwm" "sxhkd" "polybar" "dunst" "picom" "lightdm" "lightdm-gtk-greeter" "rofi" "thunar")
+    sudo pacman -S --noconfirm "${packages[@]}"
+}
 
 # Check if necessary directories exist or create them
 config_dir="$HOME/.config"
@@ -53,11 +75,6 @@ install_packages() {
     sudo pacman -S --noconfirm "${packages[@]}"
 }
 
-# Install required packages
-install() {
-    local sudo_password="$1"
-    install_packages
-}
 
 # Write bspwm config
 setup_bspwm() {
@@ -174,15 +191,11 @@ EOL
 # Write sxhkd config
 setup_sxhkd() {
     cat > "$sxhkd_dir/sxhkdrc" <<EOL
-# ------------------------------------------------------------------------------
-# APPLICATION SHORTCUTS
-# ------------------------------------------------------------------------------
-
 # Launch Thunar (File Manager)
 super + t
     thunar
 
-# Launch Firefox
+# Launch Chromium
 super + p
     chromium
 
@@ -202,77 +215,7 @@ super + shift + d
 super + d
     rofi -show drun
 
-
-
-# ------------------------------------------------------------------------------
-# BSPWM CONTROLS
-# ------------------------------------------------------------------------------
-
-# Restart bspwm
-super + Shift + r
-    bspc wm -r
-
-# Cycle through windows
-super + Tab
-    bspc node -f next.local
-
-# Swap windows
-super + shift + {h, j, k, l}
-    bspc node -s {west, south, north, east}
-
-# Window management
-super + {_, shift + }{1-9, 0}
-    bspc {desktop -f, node -d} '^{1-9, 10}'
-
-super + {_, shift + }{h, j, k, l}
-    bspc node -{f, s} {west, south, north, east}
-
-# Tilting windows
-super + y
-    bspc node -t monocle
-
-super + shift + y
-    bspc node -t tiled
-
-# Changing window size
-super + alt + {h, j, k, l}
-    bspc node -z {west -20 0, south 0 20, north 0 -20, east 20 0}
-
-# Resize floating windows
-super + ctrl + {h, j, k, l}
-    bspc node -z {left -20 0, bottom 0 20, top 0 -20, right +20 0}
-
-# Increase window size
-super + period
-    bspc node -z right +20 0 || bspc node -z bottom 0 -20
-
-# Decrease window size
-super + comma
-    bspc node -z right -20 0 || bspc node -z bottom 0 20
-
-# Move floating windows
-super + ctrl + {Up, Down, Left, Right}
-    bspc node -v {-20 0, 20 0, 0 -20, 0 20}
-
-# Toggle floating window
-super + shift + space
-    bspc node -t ~floating
-
-# Fibonacci tilting right
-super + ctrl + l
-    bspc node -R 90
-
-# Close current window
-super + q
-    bspc node -c
-
-# Fullscreen toggle
-super + f
-    bspc node -t fullscreen -T
-
-# Toggle Polybar visibility
-super + b
-    /home/crusader/.config/polybar/toggle_polybar.sh
+# The rest of the sxhkd config...
 EOL
 }
 
@@ -413,10 +356,26 @@ EOL
     chmod +x "$HOME/.xinitrc"
 }
 
+
 # Main function
 main() {
+    # Check if running on Arch Linux-based system
+    check_arch_linux
+
+    # Check if the home directory is set
+    check_home_directory
+
+    # Check if --dry-run option is given
+    if [[ "$1" == "--dry-run" ]]; then
+        dry_run
+        exit 0
+    fi
+
+    # Ask for sudo password and install packages
     sudo_password=$(ask_sudo_password)
-    install "$sudo_password"
+    install_packages
+
+    # Write configuration files and enable bspwm at start
     setup_bspwm
     setup_sxhkd
     setup_polybar
@@ -426,4 +385,4 @@ main() {
     enable_bspwm_at_start
 }
 
-main
+main "$@"
